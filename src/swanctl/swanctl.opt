@@ -169,19 +169,21 @@ connections.<conn>.fragmentation = yes
 	irrespective of the value of this option (even when set to _no_).
 
 connections.<conn>.childless = allow
-	Use childless IKE_SA initiation (_allow_, _force_ or _never_).
+	Use childless IKE_SA initiation (_allow_, _prefer_, _force_ or _never_).
 
-	Use childless IKE_SA initiation (RFC 6023) for IKEv2.  Acceptable values
-	are _allow_ (the default), _force_ and _never_. If set to _allow_,
-	responders will accept childless IKE_SAs (as indicated via notify in the
-	IKE_SA_INIT response) while initiators continue to create regular IKE_SAs
-	with the first CHILD_SA created during IKE_AUTH, unless the IKE_SA is
-	initiated explicitly without any children (which will fail if the responder
-	does not support or has disabled this extension).  If set to _force_, only
-	childless initiation is accepted and the first CHILD_SA is created with a
-	separate CREATE_CHILD_SA exchange (e.g. to use an independent DH exchange
-	for all CHILD_SAs).  Finally, setting the option to _never_ disables support
-	for childless IKE_SAs as responder.
+	Use childless IKE_SA initiation (RFC 6023) for IKEv2, with the first
+	CHILD_SA created with a separate CREATE_CHILD_SA exchange (e.g. to use an
+	independent DH exchange for all CHILD_SAs).  Acceptable values are _allow_
+	(the default), _prefer_, _force_ and _never_. If set to _allow_, responders
+	will accept childless IKE_SAs (as indicated via notify in the IKE_SA_INIT
+	response) while initiators continue to create regular IKE_SAs with the first
+	CHILD_SA created during IKE_AUTH, unless the IKE_SA is initiated explicitly
+	without any children (which will fail if the responder does not support or
+	has disabled this extension). The effect of _prefer_ is the same as _allow_
+	on responders, but as initiator a childless IKE_SA is initiated if the
+	responder supports it. If set to _force_, only childless initiation is
+	accepted in either role.  Finally, setting the option to _never_ disables
+	support for childless IKE_SAs as responder.
 
 connections.<conn>.send_certreq = yes
 	Send certificate requests payloads (_yes_ or _no_).
@@ -202,6 +204,19 @@ connections.<conn>.send_cert = ifasked
 	certificate requests have been received. _never_ disables sending of
 	certificate payloads altogether, _always_ causes certificate payloads to be
 	sent unconditionally whenever certificate authentication is used.
+
+connections.<conn>.ocsp = reply
+	Request and send OCSP status in certificate request or certificate payloads
+	(_never_, _reply, _request_ or _both_).
+
+	Send OCSP status requests in certificate request payloads and/or send OCSP
+	status response in certificate payloads when using certificate
+	authentication. With the default of _reply_ the daemon sends OCSP status
+	responses in certificate payloads if an OCSP status request has been
+	received in a certificate request, _never_ disables sending of OCSP status
+	requests and responses altogether, _request_ causes OCSP status requests in
+	certificate request payloads to be sent whenever certificate authentication
+	is used, _both_ combines _reply_ and _request_.
 
 connections.<conn>.ppk_id =
 	String identifying the Postquantum Preshared Key (PPK) to be used.
@@ -301,11 +316,21 @@ connections.<conn>.if_id_in = 0
 	XFRM interface ID set on inbound policies/SA, can be overridden by child
 	config, see there for details.
 
+	The special value _%unique_ allocates a unique interface ID per IKE_SA,
+	which is inherited by all its CHILD_SAs (unless overridden there), beyond
+	that the value _%unique-dir_ assigns a different unique interface ID for
+	each direction (in/out).
+
 connections.<conn>.if_id_out = 0
 	Default outbound XFRM interface ID for children.
 
 	XFRM interface ID set on outbound policies/SA, can be overridden by child
 	config, see there for details.
+
+	The special value _%unique_ allocates a unique interface ID per IKE_SA,
+	which is inherited by all its CHILD_SAs (unless overridden there), beyond
+	that the value _%unique-dir_ assigns a different unique interface ID for
+	each direction (in/out).
 
 connections.<conn>.mediation = no
 	Whether this connection is a mediation connection.
@@ -885,7 +910,8 @@ connections.<conn>.children.<child>.dpd_action = clear
 	Action to perform for this CHILD_SA on DPD timeout. The default _clear_
 	closes the CHILD_SA and does not take further action. _trap_ installs
 	a trap policy, which will catch matching traffic and tries to re-negotiate
-	the tunnel on-demand. _restart_ immediately tries to re-negotiate the
+	the tunnel on-demand (note that this is redundant if **start_action**
+	includes _trap_). _restart_ immediately tries to re-negotiate the
 	CHILD_SA under a fresh IKE_SA.
 
 connections.<conn>.children.<child>.ipcomp = no
@@ -991,7 +1017,7 @@ connections.<conn>.children.<child>.set_mark_out = 0/0x00000000
 	requires at least Linux 4.19.
 
 connections.<conn>.children.<child>.if_id_in = 0
-	Inbound XFRM interface ID.
+	Inbound XFRM interface ID (32-bit unsigned integer).
 
 	XFRM interface ID set on inbound policies/SA. This allows installing
 	duplicate policies/SAs and associates them with an interface with the same
@@ -1000,7 +1026,7 @@ connections.<conn>.children.<child>.if_id_in = 0
 	interface ID for each CHILD_SA direction (in/out).
 
 connections.<conn>.children.<child>.if_id_out = 0
-	Outbound XFRM interface ID.
+	Outbound XFRM interface ID (32-bit unsigned integer).
 
 	XFRM interface ID set on outbound policies/SA. This allows installing
 	duplicate policies/SAs and associates them with an interface with the same
@@ -1009,6 +1035,34 @@ connections.<conn>.children.<child>.if_id_out = 0
 	interface ID for each CHILD_SA direction (in/out).
 
 	The daemon will not install routes for CHILD_SAs that have this option set.
+
+connections.<conn>.children.<child>.label
+	Optional security label (e.g. SELinux context), IKEv2 only. Refer to
+	**label_mode** for details on how labels are processed.
+
+connections.<conn>.children.<child>.label_mode = system
+	Security label mode (_system_, _simple_ or _selinux_), IKEv2 only.
+
+	Defines the mode in which the configured security label is used. The default
+	value of _system_ selects _selinux_ if strongSwan was built with SELinux
+	support and SELinux is enabled by the kernel, otherwise, _simple_ will be
+	selected.
+
+	If set to _simple_, the label will be used as is as an additional
+	identifier/selector on the IKEv2 level when negotiating CHILD_SAs and
+	selecting configs, labels are not installed in the kernel and received
+	labels have to match exactly.
+
+	If set to _selinux_, which is only allowed if SELinux is usable on the
+	system, the configured label is expected to be a generic context (e.g.
+	_system_u:object_r:ipsec_spd_t:s0_) for which flows, whose context match it
+	via association:polmatch, will trigger an acquire if no SA exists yet for
+	the flow's specific context.  The configured label is installed on (trap)
+	policies, so this should generally be combined with _trap_ in
+	**start_action**. However, if the connection is initiated directly,
+	without acquire, a childless IKE_SA is established and appropriate trap
+	policies are installed on both ends. Labels received from peers are accepted
+	if they match the configured label via association:polmatch.
 
 connections.<conn>.children.<child>.tfc_padding = 0
 	Traffic Flow Confidentiality padding.
@@ -1032,10 +1086,12 @@ connections.<conn>.children.<child>.hw_offload = no
 	implementation.
 
 	Enable hardware offload for this CHILD_SA, if supported by the IPsec
-	implementation. The value _yes_ enforces offloading and the installation
-	will fail if it's not supported by either kernel or device.	The value _auto_
-	enables offloading, if it's supported, but the installation does not fail
-	otherwise.
+	implementation. The values _crypto_ or _packet_ enforce crypto or full
+	packet offloading and the installation will fail if the selected mode is not
+	supported by either kernel or device. On Linux, _packet_ also offloads
+	policies, including trap policies. The value _auto_ enables full packet
+	or crypto offloading, if either is supported, but the installation does not
+	fail otherwise.
 
 connections.<conn>.children.<child>.copy_df = yes
 	Whether to copy the DF bit to the outer IPv4 header in tunnel mode.
@@ -1075,19 +1131,22 @@ connections.<conn>.children.<child>.start_action = none
 
 	The value _trap_ installs a trap policy, which triggers the tunnel as soon
 	as matching traffic has been detected. The value _start_ initiates
-	the connection actively.
+	the connection actively. These two modes can be combined with _trap|start_,
+	to immediately initiate a connection for which trap policies have been
+	installed.
 
 	When unloading or replacing a CHILD_SA configuration having a
 	**start_action** different from _none_, the inverse action is performed.
 	Configurations with _start_ get closed, while such with _trap_ get
-	uninstalled.
+	uninstalled (both happens for connections with _trap|start_).
 
 connections.<conn>.children.<child>.close_action = none
 	Action to perform after a CHILD_SA gets closed (_none_, _trap_, _start_).
 
 	Action to perform after a CHILD_SA gets closed by the peer. The default of
 	_none_ does not take any action, _trap_ installs a trap policy for the
-	CHILD_SA. _start_ tries to re-create the CHILD_SA.
+	CHILD_SA (note that this is redundant if **start_action** includes _trap_).
+	_start_ tries to immediately re-create the CHILD_SA.
 
 	**close_action** does not provide any guarantee that the CHILD_SA is kept
 	alive. It acts on explicit close messages only, but not on negotiation

@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2009 Martin Willi
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -24,11 +25,7 @@
 /**
  * Maximum number of commands (+1).
  */
-
-/** orginal code 
-* #define MAX_COMMANDS 14
-*/
-#define MAX_COMMANDS 15
+#define MAX_COMMANDS 20
 
 /**
  * Maximum number of options in a command (+3)

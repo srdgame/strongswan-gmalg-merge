@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2013-2016 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -26,6 +27,8 @@ import android.widget.TextView;
 import org.strongswan.android.R;
 import org.strongswan.android.logic.imc.RemediationInstruction;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.ListFragment;
 
 public class RemediationInstructionFragment extends ListFragment
@@ -49,9 +52,9 @@ public class RemediationInstructionFragment extends ListFragment
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState)
+	public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState)
 	{
-		super.onActivityCreated(savedInstanceState);
+		super.onViewCreated(view, savedInstanceState);
 
 		if (savedInstanceState != null)
 		{

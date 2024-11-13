@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2017 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.ListFragment;
@@ -53,14 +55,16 @@ public class SelectedApplicationsListFragment extends ListFragment implements Lo
 	private SortedSet<String> mSelection;
 
 	@Override
-	public void onActivityCreated(@Nullable Bundle savedInstanceState)
+	public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState)
 	{
-		super.onActivityCreated(savedInstanceState);
+		super.onViewCreated(view, savedInstanceState);
 		setHasOptionsMenu(true);
 
-		getListView().setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
+		final boolean readOnly = getActivity().getIntent().getBooleanExtra(VpnProfileDataSource.KEY_READ_ONLY, false);
+		getListView().setChoiceMode(readOnly ? ListView.CHOICE_MODE_NONE : ListView.CHOICE_MODE_MULTIPLE);
 
 		mAdapter = new SelectedApplicationsAdapter(getActivity());
+		mAdapter.setReadOnly(readOnly);
 		setListAdapter(mAdapter);
 		setListShown(false);
 
@@ -99,6 +103,11 @@ public class SelectedApplicationsListFragment extends ListFragment implements Lo
 	@Override
 	public void onListItemClick(ListView l, View v, int position, long id)
 	{
+		if (mAdapter.isReadOnly())
+		{
+			return;
+		}
+
 		super.onListItemClick(l, v, position, id);
 		SelectedApplicationEntry item = (SelectedApplicationEntry)getListView().getItemAtPosition(position);
 		item.setSelected(!item.isSelected());

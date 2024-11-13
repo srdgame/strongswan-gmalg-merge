@@ -4,7 +4,8 @@
  * Copyright (C) 2006 Daniel Roethlisberger
  * Copyright (C) 2005-2006 Martin Willi
  * Copyright (C) 2005 Jan Hutter
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -38,6 +39,7 @@ typedef struct kernel_ipsec_query_policy_t kernel_ipsec_query_policy_t;
 #include <networking/host.h>
 #include <ipsec/ipsec_types.h>
 #include <selectors/traffic_selector.h>
+#include <selectors/sec_label.h>
 #include <plugins/plugin.h>
 #include <kernel/kernel_interface.h>
 
@@ -93,10 +95,12 @@ struct kernel_ipsec_add_sa_t {
 	uint16_t cpi;
 	/** TRUE to enable UDP encapsulation for NAT traversal */
 	bool encap;
-	/** no (disabled), yes (enabled), auto (enabled if supported) */
+	/** HW offload mode */
 	hw_offload_t hw_offload;
 	/** Mark the SA should apply to packets after processing */
 	mark_t mark;
+	/** Security label to match or apply */
+	sec_label_t *label;
 	/** TRUE to use Extended Sequence Numbers */
 	bool esn;
 	/** TRUE to copy the DF bit to the outer IPv4 header in tunnel mode */
@@ -127,6 +131,8 @@ struct kernel_ipsec_update_sa_t {
 	bool encap;
 	/** TRUE to enable UDP encapsulation */
 	bool new_encap;
+	/** New reqid, or 0 if unchanged */
+	uint32_t new_reqid;
 };
 
 /**
@@ -160,6 +166,8 @@ struct kernel_ipsec_policy_id_t {
 	uint32_t if_id;
 	/** Network interface restricting policy */
 	char *interface;
+	/** Security label restricting policy */
+	sec_label_t *label;
 };
 
 /**
@@ -172,6 +180,8 @@ struct kernel_ipsec_manage_policy_t {
 	policy_priority_t prio;
 	/** Manually-set priority (automatic if set to 0) */
 	uint32_t manual_prio;
+	/** HW offload mode */
+	hw_offload_t hw_offload;
 	/** Source address of the SA(s) tied to this policy */
 	host_t *src;
 	/** Destination address of the SA(s) tied to this policy */
@@ -259,7 +269,11 @@ struct kernel_ipsec_t {
 						  kernel_ipsec_update_sa_t *data);
 
 	/**
-	 * Query the number of bytes processed by an SA from the SAD.
+	 * Query the number of bytes and packets processed by an SA from the SAD.
+	 *
+	 * Some implementations may also return the last use time (as indicated by
+	 * get_features()). This is a monotonic timestamp as returned by
+	 * time_monotonic().
 	 *
 	 * @param id			data identifying this SA
 	 * @param data			data to query the SA
@@ -304,12 +318,11 @@ struct kernel_ipsec_t {
 	 * Query the use time of a policy.
 	 *
 	 * The use time of a policy is the time the policy was used for the last
-	 * time. It is not the system time, but a monotonic timestamp as returned
-	 * by time_monotonic.
+	 * time. This is a monotonic timestamp as returned by time_monotonic().
 	 *
 	 * @param id			data identifying this policy
 	 * @param data			data to query the policy
-	 * @param[out] use_time	the monotonic timestamp of this SA's last use
+	 * @param[out] use_time	the monotonic timestamp of this policy's last use
 	 * @return				SUCCESS if operation completed
 	 */
 	status_t (*query_policy)(kernel_ipsec_t *this,

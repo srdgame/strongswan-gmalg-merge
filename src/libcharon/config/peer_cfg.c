@@ -2,7 +2,8 @@
  * Copyright (C) 2007-2019 Tobias Brunner
  * Copyright (C) 2005-2009 Martin Willi
  * Copyright (C) 2005 Jan Hutter
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -29,6 +30,13 @@ ENUM(cert_policy_names, CERT_ALWAYS_SEND, CERT_NEVER_SEND,
 	"CERT_ALWAYS_SEND",
 	"CERT_SEND_IF_ASKED",
 	"CERT_NEVER_SEND",
+);
+
+ENUM(ocsp_policy_names, OCSP_SEND_REPLY, OCSP_SEND_NEVER,
+	"OCSP_SEND_REPLY",
+	"OCSP_SEND_REQUEST",
+	"OCSP_SEND_BOTH",
+	"OCSP_SEND_NEVER",
 );
 
 ENUM(unique_policy_names, UNIQUE_NEVER, UNIQUE_KEEP,
@@ -79,6 +87,11 @@ struct private_peer_cfg_t {
 	 * should we send a certificate
 	 */
 	cert_policy_t cert_policy;
+
+	/**
+	 * should we send OCSP status request/response
+	 */
+	ocsp_policy_t ocsp_policy;
 
 	/**
 	 * uniqueness of an IKE_SA
@@ -386,13 +399,28 @@ METHOD(peer_cfg_t, create_child_cfg_enumerator, enumerator_t*,
 /**
  * Check how good a list of TS matches a given child config
  */
-static int get_ts_match(child_cfg_t *cfg, bool local,
-						linked_list_t *sup_list, linked_list_t *hosts)
+static u_int get_ts_match(child_cfg_t *cfg, bool local,
+						  linked_list_t *sup_list, linked_list_t *hosts,
+						  linked_list_t *sup_labels)
 {
 	linked_list_t *cfg_list;
 	enumerator_t *sup_enum, *cfg_enum;
 	traffic_selector_t *sup_ts, *cfg_ts, *subset;
-	int match = 0, round;
+	sec_label_t *label;
+	u_int match = 0, round;
+	bool exact = FALSE;
+
+	if (cfg->select_label(cfg, sup_labels, TRUE, &label, &exact))
+	{
+		if (label)
+		{
+			match += exact ? 500 : 100;
+		}
+	}
+	else
+	{	/* label config doesn't match, no need to check TS  */
+		return match;
+	}
 
 	/* fetch configured TS list, narrowing dynamic TS */
 	cfg_list = cfg->get_traffic_selectors(cfg, local, NULL, hosts, TRUE);
@@ -432,24 +460,29 @@ static int get_ts_match(child_cfg_t *cfg, bool local,
 
 METHOD(peer_cfg_t, select_child_cfg, child_cfg_t*,
 	private_peer_cfg_t *this, linked_list_t *my_ts, linked_list_t *other_ts,
-	linked_list_t *my_hosts, linked_list_t *other_hosts)
+	linked_list_t *my_hosts, linked_list_t *other_hosts,
+	linked_list_t *my_labels, linked_list_t *other_labels)
 {
 	child_cfg_t *current, *found = NULL;
 	enumerator_t *enumerator;
-	int best = 0;
+	u_int best = 0;
 
 	DBG2(DBG_CFG, "looking for a child config for %#R === %#R", my_ts, other_ts);
 	enumerator = create_child_cfg_enumerator(this);
 	while (enumerator->enumerate(enumerator, &current))
 	{
-		int my_prio, other_prio;
+		u_int my_prio, other_prio;
 
-		my_prio = get_ts_match(current, TRUE, my_ts, my_hosts);
-		other_prio = get_ts_match(current, FALSE, other_ts, other_hosts);
-
-		if (my_prio && other_prio)
+		my_prio = get_ts_match(current, TRUE, my_ts, my_hosts, my_labels);
+		if (!my_prio)
 		{
-			DBG2(DBG_CFG, "  candidate \"%s\" with prio %d+%d",
+			continue;
+		}
+		other_prio = get_ts_match(current, FALSE, other_ts, other_hosts,
+								  other_labels);
+		if (other_prio)
+		{
+			DBG2(DBG_CFG, "  candidate \"%s\" with prio %u+%u",
 				 current->get_name(current), my_prio, other_prio);
 			if (my_prio + other_prio > best)
 			{
@@ -472,6 +505,12 @@ METHOD(peer_cfg_t, get_cert_policy, cert_policy_t,
 	private_peer_cfg_t *this)
 {
 	return this->cert_policy;
+}
+
+METHOD(peer_cfg_t, get_ocsp_policy, ocsp_policy_t,
+	private_peer_cfg_t *this)
+{
+	return this->ocsp_policy;
 }
 
 METHOD(peer_cfg_t, get_unique_policy, unique_policy_t,
@@ -720,6 +759,7 @@ METHOD(peer_cfg_t, equals, bool,
 	return (
 		get_ike_version(this) == get_ike_version(other) &&
 		this->cert_policy == other->cert_policy &&
+		this->ocsp_policy == other->ocsp_policy &&
 		this->unique == other->unique &&
 		this->keyingtries == other->keyingtries &&
 		this->use_mobike == other->use_mobike &&
@@ -807,6 +847,7 @@ peer_cfg_t *peer_cfg_create(char *name, ike_cfg_t *ike_cfg,
 			.create_child_cfg_enumerator = _create_child_cfg_enumerator,
 			.select_child_cfg = _select_child_cfg,
 			.get_cert_policy = _get_cert_policy,
+			.get_ocsp_policy = _get_ocsp_policy,
 			.get_unique_policy = _get_unique_policy,
 			.get_keyingtries = _get_keyingtries,
 			.get_rekey_time = _get_rekey_time,
@@ -840,6 +881,7 @@ peer_cfg_t *peer_cfg_create(char *name, ike_cfg_t *ike_cfg,
 		.child_cfgs = linked_list_create(),
 		.lock = rwlock_create(RWLOCK_TYPE_DEFAULT),
 		.cert_policy = data->cert_policy,
+		.ocsp_policy = data->ocsp_policy,
 		.unique = data->unique,
 		.keyingtries = data->keyingtries,
 		.rekey_time = data->rekey_time,

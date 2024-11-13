@@ -1,7 +1,8 @@
 
 /*
  * Copyright (C) 2010 Martin Willi
- * Copyright (C) 2010 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -209,7 +210,7 @@ static status_t build_pkt(private_tls_eap_t *this, chunk_t *out)
 	eap_tls_packet_t *pkt;
 	size_t len, reclen, msg_len_offset;
 	status_t status;
-	char *kind;
+	char *kind DBG_UNUSED;
 
 	if (this->is_server)
 	{
@@ -323,7 +324,7 @@ static chunk_t create_ack(private_tls_eap_t *this)
 		default:
 			break;
 	}
-	DBG2(DBG_TLS, "sending %N acknowledgement packet",
+	DBG2(DBG_TLS, "sending %N acknowledgment packet",
 		 eap_type_names, this->type);
 	return chunk_clone(chunk_from_thing(pkt));
 }
@@ -368,9 +369,12 @@ METHOD(tls_eap_t, process, status_t,
 	}
 	else
 	{
+		/* note that with TLS 1.3 the client sends an empty EAP packet after the
+		 * server sent the "protected success indication" over the TLS
+		 * connection, which is interpreted here as an ACK packet */
 		if (in.len == sizeof(eap_tls_packet_t))
 		{
-			DBG2(DBG_TLS, "received %N acknowledgement packet",
+			DBG2(DBG_TLS, "received %N acknowledgment packet",
 				 eap_type_names, this->type);
 			status = build_pkt(this, out);
 			if (status == INVALID_STATE && this->tls->is_complete(this->tls))

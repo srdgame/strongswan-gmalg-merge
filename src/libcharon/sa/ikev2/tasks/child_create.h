@@ -1,7 +1,8 @@
 /*
  * Copyright (C) 2018-2019 Tobias Brunner
  * Copyright (C) 2007 Martin Willi
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -48,6 +49,10 @@ struct child_create_t {
 	 * When this task is used for rekeying, the same reqid is used
 	 * for the new CHILD_SA.
 	 *
+	 * This must only be called with dynamically allocated reqids (i.e. from
+	 * kernel_interface_t::alloc_reqid()), the method takes a reference that's
+	 * maintained for the lifetime of the task.
+	 *
 	 * @param reqid		reqid to use
 	 */
 	void (*use_reqid) (child_create_t *this, uint32_t reqid);
@@ -69,13 +74,20 @@ struct child_create_t {
 	void (*use_if_ids)(child_create_t *this, uint32_t in, uint32_t out);
 
 	/**
+	 * Use specific security label, overriding configuration.
+	 *
+	 * @param label			security label
+	 */
+	void (*use_label)(child_create_t *this, sec_label_t *label);
+
+	/**
 	 * Initially propose a specific DH group to override configuration.
 	 *
 	 * This is used during rekeying to prefer the previously negotiated group.
 	 *
 	 * @param dh_group	DH group to use
 	 */
-	void (*use_dh_group)(child_create_t *this, diffie_hellman_group_t dh_group);
+	void (*use_dh_group)(child_create_t *this, key_exchange_method_t dh_group);
 
 	/**
 	 * Get the lower of the two nonces, used for rekey collisions.

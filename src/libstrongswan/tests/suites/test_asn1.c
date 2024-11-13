@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2013 Andreas Steffen
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -64,9 +65,10 @@ START_TEST(test_asn1_parse_algorithmIdentifier)
 
 	testdata_t test[] = {
 		{ OID_ECDSA_WITH_SHA1, TRUE,  chunk_empty },
-		{ OID_SHA1_WITH_RSA,   TRUE,  chunk_from_chars(0x05, 0x00) },
+		{ OID_SHA1_WITH_RSA,   FALSE, chunk_from_chars(0x05, 0x00) },
 		{ OID_3DES_EDE_CBC,    FALSE, chunk_from_chars(0x04, 0x01, 0xaa) },
-		{ OID_PBKDF2,          FALSE, chunk_from_chars(0x30, 0x01, 0xaa) }
+		{ OID_PBKDF2,          FALSE, chunk_from_chars(0x30, 0x01, 0xaa) },
+		{ OID_ECGDSA_PUBKEY,   FALSE, chunk_from_chars(0x02, 0x01, 0x01, 0x30, 0x01, 0xaa) },
 	};
 
 	chunk_t algid, parameters;
@@ -79,16 +81,16 @@ START_TEST(test_asn1_parse_algorithmIdentifier)
 		parameters = chunk_empty;
 		if (i == 2)
 		{
-			alg = asn1_parse_algorithmIdentifier(algid, 0, NULL);
+			alg = asn1_parse_algorithmIdentifier(algid, _i, NULL);
 		}
 		else
 		{
-			alg = asn1_parse_algorithmIdentifier(algid, 0, &parameters);
+			alg = asn1_parse_algorithmIdentifier(algid, _i, &parameters);
 			if (test[i].empty)
 			{
 				ck_assert(parameters.len == 0 && parameters.ptr == NULL);
 			}
-				else
+			else
 			{
 				ck_assert(chunk_equals(parameters, test[i].parameters));
 			}
@@ -822,7 +824,7 @@ Suite *asn1_suite_create()
 	suite_add_tcase(s, tc);
 
 	tc = tcase_create("parse_algorithmIdentifier");
-	tcase_add_test(tc, test_asn1_parse_algorithmIdentifier);
+	tcase_add_loop_test(tc, test_asn1_parse_algorithmIdentifier, -1, 1);
 	suite_add_tcase(s, tc);
 
 	tc = tcase_create("known_oid");

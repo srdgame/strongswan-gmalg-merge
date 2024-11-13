@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2012 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -97,7 +98,8 @@ static private_key_t *parse_private_key(chunk_t blob)
 			case PKINFO_PRIVATE_KEY:
 			{
 				DBG2(DBG_ASN, "-- > --");
-				if (params.ptr)
+				if (params.len &&
+					!chunk_equals(params, chunk_from_chars(0x05, 0x00)))
 				{
 					key = lib->creds->create(lib->creds, CRED_PRIVATE_KEY,
 											 type, BUILD_BLOB_ALGID_PARAMS,
@@ -120,35 +122,60 @@ end:
 }
 
 /**
+ * Try to decrypt the given blob using the given password and pkcs5 object.
+ */
+static private_key_t *decrypt_private_key_pw(key_type_t type, pkcs5_t *pkcs5,
+											 chunk_t blob, chunk_t password)
+{
+	private_key_t *private_key;
+	chunk_t decrypted;
+
+	if (!pkcs5->decrypt(pkcs5, password, blob, &decrypted))
+	{
+		return NULL;
+	}
+	/* do a quick check to validate whether the password was correct */
+	if (!is_asn1(decrypted))
+	{
+		chunk_clear(&decrypted);
+		return NULL;
+	}
+	private_key = lib->creds->create(lib->creds, CRED_PRIVATE_KEY,
+									 type, BUILD_BLOB_ASN1_DER,
+									 decrypted, BUILD_END);
+	chunk_clear(&decrypted);
+	return private_key;
+}
+
+/**
  * Try to decrypt the given blob with multiple passwords using the given
  * pkcs5 object.
  */
-static private_key_t *decrypt_private_key(pkcs5_t *pkcs5, chunk_t blob)
+static private_key_t *decrypt_private_key(key_type_t type, pkcs5_t *pkcs5,
+										  chunk_t blob)
 {
 	enumerator_t *enumerator;
 	shared_key_t *shared;
-	private_key_t *private_key = NULL;
+	private_key_t *private_key;
+
+	private_key = decrypt_private_key_pw(type, pkcs5, blob, chunk_empty);
+	if (private_key)
+	{
+		return private_key;
+	}
 
 	enumerator = lib->credmgr->create_shared_enumerator(lib->credmgr,
 										SHARED_PRIVATE_KEY_PASS, NULL, NULL);
 	while (enumerator->enumerate(enumerator, &shared, NULL, NULL))
 	{
-		chunk_t decrypted;
-
-		if (!pkcs5->decrypt(pkcs5, shared->get_key(shared), blob, &decrypted))
-		{
-			continue;
-		}
-		private_key = parse_private_key(decrypted);
+		private_key = decrypt_private_key_pw(type, pkcs5, blob,
+											 shared->get_key(shared));
 		if (private_key)
 		{
-			chunk_clear(&decrypted);
 			break;
 		}
-		chunk_free(&decrypted);
 	}
 	enumerator->destroy(enumerator);
-
 	return private_key;
 }
 
@@ -168,7 +195,7 @@ static const asn1Object_t encryptedPKIObjects[] = {
  * Load an encrypted private key from an ASN.1 encoded blob
  * Schemes per PKCS#5 (RFC 2898)
  */
-static private_key_t *parse_encrypted_private_key(chunk_t blob)
+static private_key_t *parse_encrypted_private_key(key_type_t type, chunk_t blob)
 {
 	asn1_parser_t *parser;
 	chunk_t object;
@@ -194,7 +221,7 @@ static private_key_t *parse_encrypted_private_key(chunk_t blob)
 			}
 			case EPKINFO_ENCRYPTED_DATA:
 			{
-				key = decrypt_private_key(pkcs5, object);
+				key = decrypt_private_key(type, pkcs5, object);
 				break;
 			}
 		}
@@ -229,7 +256,7 @@ private_key_t *pkcs8_private_key_load(key_type_t type, va_list args)
 		break;
 	}
 	/* we don't know whether it is encrypted or not, try both ways */
-	key = parse_encrypted_private_key(blob);
+	key = parse_encrypted_private_key(type, blob);
 	if (!key)
 	{
 		key = parse_private_key(blob);

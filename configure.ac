@@ -1,8 +1,9 @@
 #
-# Copyright (C) 2007-2017 Tobias Brunner
-# Copyright (C) 2006-2019 Andreas Steffen
+# Copyright (C) 2007-2022 Tobias Brunner
+# Copyright (C) 2006-2022 Andreas Steffen
 # Copyright (C) 2006-2014 Martin Willi
-# HSR Hochschule fuer Technik Rapperswil
+#
+# Copyright (C) secunet Security Networks AG
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -19,7 +20,7 @@
 #  initialize & set some vars
 # ============================
 
-AC_INIT([strongSwan],[5.9.3dr2])
+AC_INIT([strongSwan],[5.9.14])
 AM_INIT_AUTOMAKE(m4_esyscmd([
 	echo tar-ustar
 	echo subdir-objects
@@ -144,11 +145,12 @@ ARG_ENABL_SET([ctr],            [enables the Counter Mode wrapper crypto plugin.
 ARG_DISBL_SET([des],            [disable DES/3DES software implementation plugin.])
 ARG_DISBL_SET([drbg],           [disable the NIST Deterministic Random Bit Generator plugin.])
 ARG_DISBL_SET([fips-prf],       [disable FIPS PRF software implementation plugin.])
-ARG_ENABL_SET([gcm],            [enables the GCM AEAD wrapper crypto plugin.])
+ARG_DISBL_SET([gcm],            [disable the GCM AEAD wrapper crypto plugin.])
 ARG_ENABL_SET([gcrypt],         [enables the libgcrypt plugin.])
 ARG_DISBL_SET([gmp],            [disable GNU MP (libgmp) based crypto implementation plugin.])
 ARG_DISBL_SET([curve25519],     [disable Curve25519 Diffie-Hellman plugin.])
 ARG_DISBL_SET([hmac],           [disable HMAC crypto implementation plugin.])
+ARG_DISBL_SET([kdf],            [disable KDF (prf+) implementation plugin.])
 ARG_ENABL_SET([md4],            [enable MD4 software implementation plugin.])
 ARG_DISBL_SET([md5],            [disable MD5 software implementation plugin.])
 ARG_ENABL_SET([mgf1],           [enable the MGF1 software implementation plugin.])
@@ -178,6 +180,7 @@ ARG_DISBL_SET([pkcs12],         [disable PKCS12 container support plugin.])
 ARG_DISBL_SET([pubkey],         [disable RAW public key support plugin.])
 ARG_DISBL_SET([sshkey],         [disable SSH key decoding plugin.])
 ARG_DISBL_SET([x509],           [disable X509 certificate implementation plugin.])
+ARG_ENABL_SET([openxpki],       [enable OCSP responder accessing OpenXPKI certificate database.])
 # fetcher/resolver plugins
 ARG_ENABL_SET([curl],           [enable CURL fetcher plugin to fetch files via libcurl. Requires libcurl.])
 ARG_ENABL_SET([files],          [enable simple file:// URI fetcher.])
@@ -218,7 +221,7 @@ ARG_ENABL_SET([ext-auth],       [enable plugin calling an external authorization
 ARG_ENABL_SET([ipseckey],       [enable IPSECKEY authentication plugin.])
 ARG_ENABL_SET([keychain],       [enables OS X Keychain Services credential set.])
 ARG_ENABL_SET([pkcs11],         [enables the PKCS11 token support plugin.])
-ARG_ENABL_SET([tpm],            [enables the TPM plugin.])
+ARG_ENABL_SET([tpm],            [enables the TPM plugin to access private keys and certificates bound to a TPM 2.0.])
 ARG_DISBL_SET([revocation],     [disable X509 CRL/OCSP revocation check plugin.])
 ARG_ENABL_SET([whitelist],      [enable peer identity whitelisting plugin.])
 ARG_DISBL_SET([xauth-generic],  [disable generic XAuth backend.])
@@ -302,12 +305,12 @@ ARG_ENABL_SET([medcli],         [enable mediation client configuration database 
 ARG_ENABL_SET([medsrv],         [enable mediation server web frontend and daemon plugin.])
 ARG_ENABL_SET([nm],             [enable NetworkManager backend.])
 ARG_DISBL_SET([pki],            [disable pki certificate utility.])
-ARG_DISBL_SET([scepclient],     [disable SCEP client tool.])
 ARG_DISBL_SET([scripts],        [disable additional utilities (found in directory scripts).])
 ARG_ENABL_SET([svc],            [enable charon Windows service.])
 ARG_ENABL_SET([systemd],        [enable systemd specific IKE daemon charon-systemd.])
 ARG_DISBL_SET([swanctl],        [disable swanctl configuration and control tool.])
 ARG_ENABL_SET([tkm],            [enable Trusted Key Manager support.])
+ARG_ENABL_SET([cert-enroll],    [enable automatic certificate enrollment via EST or SCEP.])
 # optional features
 ARG_ENABL_SET([bfd-backtraces], [use binutils libbfd to resolve backtraces for memory leaks and segfaults.])
 ARG_ENABL_SET([dbghelp-backtraces],[use dbghlp.dll on Windows to create and print backtraces for memory leaks and segfaults.])
@@ -323,16 +326,20 @@ ARG_ENABL_SET([python-eggs],    [enable build of provided python eggs.])
 ARG_ENABL_SET([python-eggs-install],[enable installation of provided python eggs.])
 ARG_ENABL_SET([perl-cpan],      [enable build of provided perl CPAN module.])
 ARG_ENABL_SET([perl-cpan-install],[enable installation of provided CPAN module.])
+ARG_ENABL_SET([selinux],        [enable SELinux support for labeled IPsec.])
 ARG_ENABL_SET([tss-trousers],   [enable the use of the TrouSerS Trusted Software Stack])
 ARG_ENABL_SET([tss-tss2],       [enable the use of the TSS 2.0 Trusted Software Stack])
+ARG_ENABL_SET([cert-enroll-timer],[enable installation of cert-enroll as a systemd timer.])
 
 # compile options
+ARG_ENABL_SET([asan],           [enable build with AddressSanitizer (ASan).])
 ARG_ENABL_SET([coverage],       [enable lcov coverage report generation.])
 ARG_ENABL_SET([git-version],    [use output of 'git describe' as version information in executables.])
 ARG_ENABL_SET([leak-detective], [enable malloc hooks to find memory leaks.])
 ARG_ENABL_SET([lock-profiler],  [enable lock/mutex profiling code.])
 ARG_ENABL_SET([log-thread-ids], [use thread ID, if available, instead of an incremented value starting from 1, to identify threads.])
 ARG_ENABL_SET([monolithic],     [build monolithic version of libstrongswan that includes all enabled plugins. Similarly, the plugins of charon are assembled in libcharon.])
+ARG_ENABL_SET([warnings],       [enable extended compiler warnings and -Werror (auto-enabled when building from the repository).])
 
 # ===================================
 #  option to disable default options
@@ -365,7 +372,7 @@ fi
 # ===========================
 
 if test -z "$CFLAGS"; then
-	CFLAGS="-g -O2 -Wall -Wno-format -Wno-format-security -Wno-pointer-sign"
+	CFLAGS="-g -O2"
 fi
 AC_SUBST(PLUGIN_CFLAGS)
 AC_PROG_CC
@@ -385,7 +392,7 @@ LT_INIT
 AC_PROG_INSTALL
 AC_PROG_EGREP
 AC_PROG_AWK
-AC_PROG_LEX
+AC_PROG_LEX(noyywrap)
 AC_PROG_YACC
 AM_PATH_PYTHON(,,[:])
 AC_PATH_PROG([PERL], [perl], [], [$PATH:/bin:/usr/bin:/usr/local/bin])
@@ -454,7 +461,7 @@ if test x$tnc_imc = xtrue -o x$tnc_imv = xtrue -o x$tnccs_11 = xtrue -o x$tnccs_
 	tnc_tnccs=true;
 fi
 
-if test x$eap_tls = xtrue -o x$eap_ttls = xtrue -o x$eap_peap = xtrue -o x$tnc_tnccs = xtrue; then
+if test x$eap_tls = xtrue -o x$eap_ttls = xtrue -o x$eap_peap = xtrue -o x$tnc_tnccs = xtrue -o x$pki = xtrue; then
 	tls=true;
 fi
 
@@ -505,12 +512,40 @@ if test x$aikgen = xtrue; then
 	tss_trousers=true
 fi
 
+if test x$tpm = xtrue; then
+	tss_tss2=true
+fi
+
 if test x$gmp = xtrue -o x$ntru = xtrue -o x$bliss = xtrue; then
 	mgf1=true
 fi
 
 if test x$stroke = xtrue; then
 	counters=true
+fi
+
+if test x$cert_enroll = xtrue; then
+	pki=true
+fi
+
+if test x$kdf = xfalse; then
+	if test x$aesni = xtrue -o x$cmac = xtrue -o x$xcbc = xtrue; then
+		AC_MSG_WARN(m4_normalize([
+			kdf plugin is required for possible use of PRF_AES128_XCBC/CMAC
+			by one of these plugins: aesni, cmac, xcbc]))
+		kdf=true
+	elif test x$botan = xfalse -a x$openssl = xfalse -a x$wolfssl = xfalse; then
+		AC_MSG_WARN(m4_normalize([
+			kdf plugin is required because none of the following plugins is
+			enabled: botan, openssl, wolfssl]))
+		kdf=true
+	fi
+fi
+
+# enable warnings and -Werror by default when building from the repo (check with
+# -e as .git is a file in worktrees)
+if test x$warnings_given = xfalse -a -e "$srcdir"/.git; then
+	warnings=true
 fi
 
 # ===========================================
@@ -667,7 +702,7 @@ AC_CHECK_FUNC(
 	]
 )
 
-AC_CHECK_FUNCS(prctl mallinfo getpass closefrom getpwnam_r getgrnam_r getpwuid_r chown)
+AC_CHECK_FUNCS(prctl mallinfo mallinfo2 getpass closefrom getpwnam_r getgrnam_r getpwuid_r chown)
 AC_CHECK_FUNCS(fmemopen funopen mmap memrchr setlinebuf strptime dirfd sigwaitinfo explicit_bzero)
 
 AC_CHECK_FUNC([syslog], [
@@ -721,7 +756,7 @@ AC_COMPILE_IFELSE(
 		  #include <sys/types.h>
 		  #include <sys/socket.h>
 		  #include <netinet/in.h>]],
-		[[struct in6_pktinfo pi;
+		[[struct in6_pktinfo pi = {};
 		  if (pi.ipi6_ifindex)
 		  {
 		    return 0;
@@ -1007,14 +1042,16 @@ if test x$xml = xtrue; then
 	AC_SUBST(xml_LIBS)
 fi
 
-if test x$systemd = xtrue; then
+if test x$systemd = xtrue -o x$cert_enroll_timer = xtrue; then
 	AC_MSG_CHECKING([for systemd system unit directory])
 	if test -n "$systemdsystemunitdir" -a "x$systemdsystemunitdir" != xno; then
 		AC_MSG_RESULT([$systemdsystemunitdir])
 	else
 		AC_MSG_ERROR([not found (try --with-systemdsystemunitdir)])
 	fi
+fi
 
+if test x$systemd = xtrue; then
 	PKG_CHECK_MODULES(systemd, [libsystemd >= 209],
 		[AC_SUBST(systemd_CFLAGS)
 		 AC_SUBST(systemd_LIBS)],
@@ -1146,7 +1183,7 @@ if test x$openssl = xtrue; then
 	if test "x$windows" = xtrue; then
 		openssl_lib=eay32
 		AC_CHECK_LIB([$openssl_lib],[EVP_CIPHER_CTX_new],[LIBS="$LIBS"],
-			[AC_MSG_RESULT([no]);openssl_lib=""],[$DLLIB])
+			[openssl_lib=""],[$DLLIB])
 	fi
 	if test -z "$openssl_lib"; then
 		openssl_lib=crypto
@@ -1201,7 +1238,7 @@ if test x$botan = xtrue; then
 	AC_SUBST(botan_LIBS)
 	saved_LIBS=$LIBS
 	LIBS="$botan_LIBS"
-	AC_CHECK_FUNCS(botan_rng_init_custom)
+	AC_CHECK_FUNCS(botan_rng_init_custom botan_pubkey_ecc_key_used_explicit_encoding)
 	LIBS=$saved_LIBS
 fi
 
@@ -1266,6 +1303,13 @@ if test x$capabilities = xlibcap; then
 	AC_DEFINE([CAPABILITIES_LIBCAP], [], [have libpcap library])
 fi
 
+if test x$selinux = xtrue; then
+	PKG_CHECK_MODULES(selinux, [libselinux])
+	AC_SUBST(selinux_CFLAGS)
+	AC_SUBST(selinux_LIBS)
+	AC_DEFINE([USE_SELINUX], [], [build with support for SELinux])
+fi
+
 if test x$integrity_test = xtrue; then
 	AC_MSG_CHECKING([for dladdr()])
 	AC_COMPILE_IFELSE(
@@ -1316,8 +1360,6 @@ if test x$dev_headers = xyes; then
 fi
 AC_SUBST(dev_headers)
 
-CFLAGS="$CFLAGS -include `pwd`/config.h"
-
 if test x$tkm = xtrue; then
 	AC_PATH_PROG([GPRBUILD], [gprbuild], [], [$PATH:/bin:/usr/bin:/usr/local/bin])
 	if test x$GPRBUILD = x; then
@@ -1366,6 +1408,27 @@ if test x$fuzzing = xtrue; then
 		AC_SUBST(FUZZING_LDFLAGS)
 		;;
 	esac
+fi
+
+if test x$asan = xtrue; then
+	# adding this here and not earlier or passed to the script avoids issues
+	# e.g. with libpthread (libasan provides stubs for its functions but no full
+	# implementation so configure does not detect that -lpthread is required
+	# when GCC is used, clang always adds -lpthread)
+	CFLAGS="$CFLAGS -fsanitize=address -fno-omit-frame-pointer"
+	# this is necessary so AddressSanitizer can resolve symbols e.g. for
+	# C++ exceptions that are used in libbotan
+	if test x$botan = xtrue; then
+		LDFLAGS="$LDFLAGS -lstdc++"
+	fi
+	if test x$openssl = xtrue; then
+		# we need to suppress some leaks with OpenSSL 3 as we don't deinitialze
+		# it properly
+		AC_SUBST(LSAN_OPTIONS, [suppressions=\${abs_top_srcdir}/.lsan.suppressions])
+		# use this instead of AM_TESTS_ENVIRONMENT as we don't use the parallel
+		# test harness
+		AC_SUBST(TESTS_ENVIRONMENT, ['export LSAN_OPTIONS="$(LSAN_OPTIONS)";'])
+	fi
 fi
 
 if test x$ruby_gems = xtrue; then
@@ -1435,6 +1498,36 @@ if test x$git_version = xtrue -a "$GIT_VERSION" != "UNKNOWN"; then
 	AC_DEFINE_UNQUOTED(VERSION, ["$GIT_VERSION"])
 fi
 
+# modify CFLAGS as needed, do this late so we don't affect configure checks
+CFLAGS="$CFLAGS -include $(pwd)/config.h"
+
+AC_MSG_CHECKING([for use of -Werror and additional warnings])
+WARN_CFLAGS=
+if test x$warnings = xtrue; then
+	WARN_CFLAGS="-Werror -Wall -Wextra"
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+# disable some warnings, whether explicitly enabled above or by default
+# these are not compatible with our custom printf specifiers
+WARN_CFLAGS="$WARN_CFLAGS -Wno-format"
+WARN_CFLAGS="$WARN_CFLAGS -Wno-format-security"
+# we generally use comments, but GCC doesn't seem to recognize many of them
+WARN_CFLAGS="$WARN_CFLAGS -Wno-implicit-fallthrough"
+# we often omit fields when initializing structs (e.g. when using INIT)
+WARN_CFLAGS="$WARN_CFLAGS -Wno-missing-field-initializers"
+# allow assigning char* to u_char* (e.g. in chunk_create())
+WARN_CFLAGS="$WARN_CFLAGS -Wno-pointer-sign"
+# allow comparing e.g. int with chunk_t::len or countof(...)
+WARN_CFLAGS="$WARN_CFLAGS -Wno-sign-compare"
+# allow defensive checks like e.g. unsigned_var < CONST(= currently 0)
+WARN_CFLAGS="$WARN_CFLAGS -Wno-type-limits"
+# we often don't use function parameters when implementing interfaces
+WARN_CFLAGS="$WARN_CFLAGS -Wno-unused-parameter"
+# add the flags before existing CFLAGS so warning flags can be overridden
+CFLAGS="$WARN_CFLAGS $CFLAGS"
+
 # ===============================================
 #  collect plugin list for strongSwan components
 # ===============================================
@@ -1443,10 +1536,8 @@ m4_include(m4/macros/add-plugin.m4)
 
 # plugin lists for all components
 charon_plugins=
-starter_plugins=
 pool_plugins=
 attest_plugins=
-scepclient_plugins=
 pki_plugins=
 scripts_plugins=
 fuzz_plugins=
@@ -1463,49 +1554,49 @@ s_plugins=
 t_plugins=
 p_plugins=
 
-ADD_PLUGIN([test-vectors],         [s charon scepclient pki])
+ADD_PLUGIN([test-vectors],         [s charon pki])
 ADD_PLUGIN([unbound],              [s charon scripts])
-ADD_PLUGIN([ldap],                 [s charon scepclient scripts nm cmd])
+ADD_PLUGIN([ldap],                 [s charon scripts nm cmd])
 ADD_PLUGIN([pkcs11],               [s charon pki nm cmd])
 ADD_PLUGIN([tpm],                  [p charon pki nm cmd])
-ADD_PLUGIN([aesni],                [s charon scepclient pki scripts medsrv attest nm cmd aikgen])
-ADD_PLUGIN([aes],                  [s charon scepclient pki scripts nm cmd])
-ADD_PLUGIN([des],                  [s charon scepclient pki scripts nm cmd])
-ADD_PLUGIN([blowfish],             [s charon scepclient pki scripts nm cmd])
-ADD_PLUGIN([rc2],                  [s charon scepclient pki scripts nm cmd])
-ADD_PLUGIN([sha2],                 [s charon scepclient pki scripts medsrv attest nm cmd aikgen fuzz])
-ADD_PLUGIN([sha3],                 [s charon scepclient pki scripts medsrv attest nm cmd aikgen fuzz])
-ADD_PLUGIN([sha1],                 [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen fuzz])
-ADD_PLUGIN([md4],                  [s charon scepclient pki nm cmd])
-ADD_PLUGIN([md5],                  [s charon scepclient pki scripts attest nm cmd aikgen])
-ADD_PLUGIN([mgf1],                 [s charon scepclient pki scripts medsrv attest nm cmd aikgen])
-ADD_PLUGIN([rdrand],               [s charon scepclient pki scripts medsrv attest nm cmd aikgen])
-ADD_PLUGIN([random],               [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen])
+ADD_PLUGIN([aesni],                [s charon pki scripts medsrv attest nm cmd aikgen])
+ADD_PLUGIN([aes],                  [s charon pki scripts nm cmd])
+ADD_PLUGIN([des],                  [s charon pki scripts nm cmd])
+ADD_PLUGIN([blowfish],             [s charon pki scripts nm cmd])
+ADD_PLUGIN([rc2],                  [s charon pki scripts nm cmd])
+ADD_PLUGIN([sha2],                 [s charon pki scripts medsrv attest nm cmd aikgen fuzz])
+ADD_PLUGIN([sha3],                 [s charon pki scripts medsrv attest nm cmd aikgen fuzz])
+ADD_PLUGIN([sha1],                 [s charon pki scripts manager medsrv attest nm cmd aikgen fuzz])
+ADD_PLUGIN([md4],                  [s charon pki nm cmd])
+ADD_PLUGIN([md5],                  [s charon pki scripts attest nm cmd aikgen])
+ADD_PLUGIN([mgf1],                 [s charon pki scripts medsrv attest nm cmd aikgen])
+ADD_PLUGIN([rdrand],               [s charon pki scripts medsrv attest nm cmd aikgen])
+ADD_PLUGIN([random],               [s charon pki scripts manager medsrv attest nm cmd aikgen])
 ADD_PLUGIN([nonce],                [s charon nm cmd aikgen])
-ADD_PLUGIN([x509],                 [s charon scepclient pki scripts attest nm cmd aikgen fuzz])
+ADD_PLUGIN([x509],                 [s charon pki scripts attest nm cmd aikgen fuzz])
 ADD_PLUGIN([revocation],           [s charon pki nm cmd])
-ADD_PLUGIN([constraints],          [s charon nm cmd])
+ADD_PLUGIN([constraints],          [s charon pki nm cmd])
 ADD_PLUGIN([acert],                [s charon])
 ADD_PLUGIN([pubkey],               [s charon pki cmd aikgen])
-ADD_PLUGIN([pkcs1],                [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen fuzz])
-ADD_PLUGIN([pkcs7],                [s charon scepclient pki scripts nm cmd])
-ADD_PLUGIN([pkcs8],                [s charon scepclient pki scripts manager medsrv attest nm cmd])
-ADD_PLUGIN([pkcs12],               [s charon scepclient pki scripts cmd])
+ADD_PLUGIN([pkcs1],                [s charon pki scripts manager medsrv attest nm cmd aikgen fuzz])
+ADD_PLUGIN([pkcs7],                [s charon pki scripts nm cmd])
+ADD_PLUGIN([pkcs12],               [s charon pki scripts cmd])
 ADD_PLUGIN([pgp],                  [s charon])
 ADD_PLUGIN([dnskey],               [s charon pki])
 ADD_PLUGIN([sshkey],               [s charon pki nm cmd])
 ADD_PLUGIN([dnscert],              [c charon])
 ADD_PLUGIN([ipseckey],             [c charon])
-ADD_PLUGIN([pem],                  [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen fuzz])
+ADD_PLUGIN([pem],                  [s charon pki scripts manager medsrv attest nm cmd aikgen fuzz])
 ADD_PLUGIN([padlock],              [s charon])
-ADD_PLUGIN([openssl],              [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen])
-ADD_PLUGIN([gmalg],                [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen])
-ADD_PLUGIN([wolfssl],              [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen])
-ADD_PLUGIN([gcrypt],               [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen])
-ADD_PLUGIN([botan],                [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen])
-ADD_PLUGIN([af-alg],               [s charon scepclient pki scripts medsrv attest nm cmd aikgen])
+ADD_PLUGIN([openssl],              [s charon pki scripts manager medsrv attest nm cmd aikgen])
+ADD_PLUGIN([gmalg],                [s charon pki scripts manager medsrv attest nm cmd aikgen])
+ADD_PLUGIN([wolfssl],              [s charon pki scripts manager medsrv attest nm cmd aikgen])
+ADD_PLUGIN([gcrypt],               [s charon pki scripts manager medsrv attest nm cmd aikgen])
+ADD_PLUGIN([botan],                [s charon pki scripts manager medsrv attest nm cmd aikgen])
+ADD_PLUGIN([pkcs8],                [s charon pki scripts manager medsrv attest nm cmd])
+ADD_PLUGIN([af-alg],               [s charon pki scripts medsrv attest nm cmd aikgen])
 ADD_PLUGIN([fips-prf],             [s charon nm cmd])
-ADD_PLUGIN([gmp],                  [s charon scepclient pki scripts manager medsrv attest nm cmd aikgen fuzz])
+ADD_PLUGIN([gmp],                  [s charon pki scripts manager medsrv attest nm cmd aikgen fuzz])
 ADD_PLUGIN([curve25519],           [s charon pki scripts nm cmd])
 ADD_PLUGIN([agent],                [s charon nm cmd])
 ADD_PLUGIN([keychain],             [s charon cmd])
@@ -1513,6 +1604,7 @@ ADD_PLUGIN([chapoly],              [s charon scripts nm cmd])
 ADD_PLUGIN([xcbc],                 [s charon nm cmd])
 ADD_PLUGIN([cmac],                 [s charon nm cmd])
 ADD_PLUGIN([hmac],                 [s charon pki scripts nm cmd])
+ADD_PLUGIN([kdf],                  [s charon pki scripts nm cmd])
 ADD_PLUGIN([ctr],                  [s charon scripts nm cmd])
 ADD_PLUGIN([ccm],                  [s charon scripts nm cmd])
 ADD_PLUGIN([gcm],                  [s charon scripts nm cmd])
@@ -1520,21 +1612,23 @@ ADD_PLUGIN([ntru],                 [s charon scripts nm cmd])
 ADD_PLUGIN([drbg],                 [s charon pki scripts nm cmd])
 ADD_PLUGIN([newhope],              [s charon scripts nm cmd])
 ADD_PLUGIN([bliss],                [s charon pki scripts nm cmd])
-ADD_PLUGIN([curl],                 [s charon scepclient pki scripts nm cmd])
-ADD_PLUGIN([files],                [s charon scepclient pki scripts nm cmd])
+ADD_PLUGIN([curl],                 [s charon pki scripts nm cmd])
+ADD_PLUGIN([files],                [s charon pki scripts nm cmd])
 ADD_PLUGIN([winhttp],              [s charon pki scripts])
 ADD_PLUGIN([soup],                 [s charon pki scripts nm cmd])
-ADD_PLUGIN([mysql],                [s charon pool manager medsrv attest])
-ADD_PLUGIN([sqlite],               [s charon pool manager medsrv attest])
+ADD_PLUGIN([mysql],                [s charon pki pool manager medsrv attest])
+ADD_PLUGIN([sqlite],               [s charon pki pool manager medsrv attest])
+ADD_PLUGIN([openxpki],             [s pki])
 ADD_PLUGIN([attr],                 [c charon])
 ADD_PLUGIN([attr-sql],             [c charon])
 ADD_PLUGIN([load-tester],          [c charon])
 ADD_PLUGIN([kernel-libipsec],      [c charon cmd])
 ADD_PLUGIN([kernel-wfp],           [c charon])
 ADD_PLUGIN([kernel-iph],           [c charon])
-ADD_PLUGIN([kernel-pfkey],         [c charon starter nm cmd])
-ADD_PLUGIN([kernel-pfroute],       [c charon starter nm cmd])
-ADD_PLUGIN([kernel-netlink],       [c charon starter nm cmd])
+ADD_PLUGIN([kernel-pfkey],         [c charon nm cmd])
+ADD_PLUGIN([kernel-pfroute],       [c charon nm cmd])
+ADD_PLUGIN([kernel-netlink],       [c charon nm cmd])
+ADD_PLUGIN([selinux],              [c charon nm cmd])
 ADD_PLUGIN([resolve],              [c charon cmd])
 ADD_PLUGIN([save-keys],            [c])
 ADD_PLUGIN([socket-default],       [c charon nm cmd])
@@ -1604,10 +1698,8 @@ ADD_PLUGIN([unity],                [c charon])
 ADD_PLUGIN([counters],             [c charon])
 
 AC_SUBST(charon_plugins)
-AC_SUBST(starter_plugins)
 AC_SUBST(pool_plugins)
 AC_SUBST(attest_plugins)
-AC_SUBST(scepclient_plugins)
 AC_SUBST(pki_plugins)
 AC_SUBST(scripts_plugins)
 AC_SUBST(fuzz_plugins)
@@ -1661,11 +1753,13 @@ AM_CONDITIONAL(USE_PKCS1, test x$pkcs1 = xtrue)
 AM_CONDITIONAL(USE_PKCS7, test x$pkcs7 = xtrue)
 AM_CONDITIONAL(USE_PKCS8, test x$pkcs8 = xtrue)
 AM_CONDITIONAL(USE_PKCS12, test x$pkcs12 = xtrue)
+AM_CONDITIONAL(USE_OPENXPKI, test x$openxpki = xtrue)
 AM_CONDITIONAL(USE_PGP, test x$pgp = xtrue)
 AM_CONDITIONAL(USE_DNSKEY, test x$dnskey = xtrue)
 AM_CONDITIONAL(USE_SSHKEY, test x$sshkey = xtrue)
 AM_CONDITIONAL(USE_PEM, test x$pem = xtrue)
 AM_CONDITIONAL(USE_HMAC, test x$hmac = xtrue)
+AM_CONDITIONAL(USE_KDF, test x$kdf = xtrue)
 AM_CONDITIONAL(USE_CMAC, test x$cmac = xtrue)
 AM_CONDITIONAL(USE_XCBC, test x$xcbc = xtrue)
 AM_CONDITIONAL(USE_MYSQL, test x$mysql = xtrue)
@@ -1782,6 +1876,8 @@ AM_CONDITIONAL(USE_RESOLVE, test x$resolve = xtrue)
 AM_CONDITIONAL(USE_ATTR, test x$attr = xtrue)
 AM_CONDITIONAL(USE_ATTR_SQL, test x$attr_sql = xtrue)
 AM_CONDITIONAL(USE_COUNTERS, test x$counters = xtrue)
+AM_CONDITIONAL(USE_SELINUX, test x$selinux = xtrue)
+AM_CONDITIONAL(USE_PF_HANDLER, test x$dhcp = xtrue -o x$farp = xtrue)
 
 #  other options
 # ---------------
@@ -1799,11 +1895,10 @@ AM_CONDITIONAL(USE_ADNS, test x$adns = xtrue)
 AM_CONDITIONAL(USE_CHARON, test x$charon = xtrue)
 AM_CONDITIONAL(USE_NM, test x$nm = xtrue)
 AM_CONDITIONAL(USE_PKI, test x$pki = xtrue)
-AM_CONDITIONAL(USE_SCEPCLIENT, test x$scepclient = xtrue)
 AM_CONDITIONAL(USE_SCRIPTS, test x$scripts = xtrue)
 AM_CONDITIONAL(USE_FUZZING, test x$fuzzing = xtrue)
 AM_CONDITIONAL(USE_CONFTEST, test x$conftest = xtrue)
-AM_CONDITIONAL(USE_LIBSTRONGSWAN, test x$charon = xtrue -o x$pki = xtrue -o x$scepclient = xtrue -o x$conftest = xtrue -o x$fast = xtrue -o x$imcv = xtrue -o x$nm = xtrue -o x$tkm = xtrue -o x$cmd = xtrue -o x$tls = xtrue -o x$tnc_tnccs = xtrue -o x$aikgen = xtrue -o x$svc = xtrue -o x$systemd = xtrue)
+AM_CONDITIONAL(USE_LIBSTRONGSWAN, test x$charon = xtrue -o x$pki = xtrue -o x$conftest = xtrue -o x$fast = xtrue -o x$imcv = xtrue -o x$nm = xtrue -o x$tkm = xtrue -o x$cmd = xtrue -o x$tls = xtrue -o x$tnc_tnccs = xtrue -o x$aikgen = xtrue -o x$svc = xtrue -o x$systemd = xtrue)
 AM_CONDITIONAL(USE_LIBCHARON, test x$charon = xtrue -o x$conftest = xtrue -o x$nm = xtrue -o x$tkm = xtrue -o x$cmd = xtrue -o x$svc = xtrue -o x$systemd = xtrue)
 AM_CONDITIONAL(USE_LIBIPSEC, test x$libipsec = xtrue)
 AM_CONDITIONAL(USE_LIBNTTFFT, test x$bliss = xtrue -o x$newhope = xtrue)
@@ -1812,7 +1907,7 @@ AM_CONDITIONAL(USE_LIBTNCCS, test x$tnc_tnccs = xtrue)
 AM_CONDITIONAL(USE_LIBPTTLS, test x$tnc_tnccs = xtrue)
 AM_CONDITIONAL(USE_LIBTPMTSS, test x$tss_trousers = xtrue -o x$tss_tss2 = xtrue -o x$tpm = xtrue -o x$aikgen = xtrue -o x$imcv = xtrue)
 AM_CONDITIONAL(USE_FILE_CONFIG, test x$stroke = xtrue)
-AM_CONDITIONAL(USE_IPSEC_SCRIPT, test x$stroke = xtrue -o x$scepclient = xtrue -o x$conftest = xtrue)
+AM_CONDITIONAL(USE_IPSEC_SCRIPT, test x$stroke = xtrue -o x$conftest = xtrue)
 AM_CONDITIONAL(USE_LIBCAP, test x$capabilities = xlibcap)
 AM_CONDITIONAL(USE_VSTR, test x$printf_hooks = xvstr)
 AM_CONDITIONAL(USE_BUILTIN_PRINTF, test x$printf_hooks = xbuiltin)
@@ -1834,6 +1929,8 @@ AM_CONDITIONAL(USE_SWANCTL, test x$swanctl = xtrue)
 AM_CONDITIONAL(USE_SVC, test x$svc = xtrue)
 AM_CONDITIONAL(USE_SYSTEMD, test x$systemd = xtrue)
 AM_CONDITIONAL(USE_LEGACY_SYSTEMD, test -n "$systemdsystemunitdir" -a "x$systemdsystemunitdir" != xno)
+AM_CONDITIONAL(USE_CERT_ENROLL, test x$cert_enroll = xtrue)
+AM_CONDITIONAL(USE_CERT_ENROLL_TIMER, test x$cert_enroll_timer = xtrue)
 AM_CONDITIONAL(USE_RUBY_GEMS, test x$ruby_gems = xtrue)
 AM_CONDITIONAL(USE_PYTHON_EGGS, test x$python_eggs = xtrue)
 AM_CONDITIONAL(USE_PERL_CPAN, test x$perl_cpan = xtrue)
@@ -1888,7 +1985,6 @@ AM_COND_IF([USE_IMV_SWIMA], [strongswan_options=${strongswan_options}" sec-updat
 AM_COND_IF([USE_LIBTNCCS], [strongswan_options=${strongswan_options}" tnc"])
 AM_COND_IF([USE_MANAGER], [strongswan_options=${strongswan_options}" manager"])
 AM_COND_IF([USE_MEDSRV], [strongswan_options=${strongswan_options}" medsrv"])
-AM_COND_IF([USE_SCEPCLIENT], [strongswan_options=${strongswan_options}" scepclient"])
 AM_COND_IF([USE_PKI], [strongswan_options=${strongswan_options}" pki"])
 AM_COND_IF([USE_SWANCTL], [strongswan_options=${strongswan_options}" swanctl"])
 AM_COND_IF([USE_SYSTEMD], [strongswan_options=${strongswan_options}" charon-systemd"])
@@ -1931,6 +2027,7 @@ AC_CONFIG_FILES([
 	src/libstrongswan/plugins/random/Makefile
 	src/libstrongswan/plugins/nonce/Makefile
 	src/libstrongswan/plugins/hmac/Makefile
+	src/libstrongswan/plugins/kdf/Makefile
 	src/libstrongswan/plugins/xcbc/Makefile
 	src/libstrongswan/plugins/x509/Makefile
 	src/libstrongswan/plugins/revocation/Makefile
@@ -1941,6 +2038,7 @@ AC_CONFIG_FILES([
 	src/libstrongswan/plugins/pkcs7/Makefile
 	src/libstrongswan/plugins/pkcs8/Makefile
 	src/libstrongswan/plugins/pkcs12/Makefile
+	src/libstrongswan/plugins/openxpki/Makefile
 	src/libstrongswan/plugins/pgp/Makefile
 	src/libstrongswan/plugins/dnskey/Makefile
 	src/libstrongswan/plugins/sshkey/Makefile
@@ -2086,6 +2184,7 @@ AC_CONFIG_FILES([
 	src/libcharon/plugins/resolve/Makefile
 	src/libcharon/plugins/attr/Makefile
 	src/libcharon/plugins/attr_sql/Makefile
+	src/libcharon/plugins/selinux/Makefile
 	src/libcharon/tests/Makefile
 	src/libtpmtss/Makefile
 	src/libtpmtss/plugins/tpm/Makefile
@@ -2094,8 +2193,6 @@ AC_CONFIG_FILES([
 	src/starter/Makefile
 	src/starter/tests/Makefile
 	src/_updown/Makefile
-	src/_copyright/Makefile
-	src/scepclient/Makefile
 	src/aikgen/Makefile
 	src/tpm_extendpcr/Makefile
 	src/pki/Makefile
@@ -2110,6 +2207,7 @@ AC_CONFIG_FILES([
 	src/sw-collector/Makefile
 	src/sec-updater/Makefile
 	src/swanctl/Makefile
+	src/cert-enroll/Makefile
 	src/xfrmi/Makefile
 	scripts/Makefile
 	testing/Makefile
@@ -2128,14 +2226,19 @@ AC_CONFIG_FILES([
 	src/pki/man/pki.1
 	src/pki/man/pki---acert.1
 	src/pki/man/pki---dn.1
+	src/pki/man/pki---est.1
+	src/pki/man/pki---estca.1
 	src/pki/man/pki---gen.1
 	src/pki/man/pki---issue.1
 	src/pki/man/pki---keyid.1
+	src/pki/man/pki---ocsp.1
 	src/pki/man/pki---pkcs12.1
 	src/pki/man/pki---pkcs7.1
 	src/pki/man/pki---print.1
 	src/pki/man/pki---pub.1
 	src/pki/man/pki---req.1
+	src/pki/man/pki---scep.1
+	src/pki/man/pki---scepca.1
 	src/pki/man/pki---self.1
 	src/pki/man/pki---signcrl.1
 	src/pki/man/pki---verify.1
@@ -2145,6 +2248,7 @@ AC_CONFIG_FILES([
 	src/pt-tls-client/pt-tls-client.1
 	src/sw-collector/sw-collector.8
 	src/sec-updater/sec-updater.8
+	src/cert-enroll/cert-enroll.8
 ])
 
 AC_OUTPUT

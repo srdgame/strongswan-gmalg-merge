@@ -1,7 +1,8 @@
 /*
  * Copyright (C) 2012-2013 Tobias Brunner
  * Copyright (C) 2009 Martin Willi
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -105,7 +106,7 @@ static struct {
 	  "\xaf\xca\xd7\x13\x68\xa1\xf1\xc9\x6b\x86\x96\xfc\x77\x57\x01\x00"},
 
 	/* CISCO-UNITY, similar to DPD the last two bytes indicate the version */
-	{ "Cisco Unity", EXT_CISCO_UNITY, FALSE, TRUE, 16,
+	{ "Cisco Unity", EXT_CISCO_UNITY, FALSE, FALSE, 16,
 	  "\x12\xf5\xf2\x8c\x45\x71\x68\xa9\x70\x2d\x9f\xe2\x74\xcc\x01\x00"},
 
 	/* Proprietary IKE fragmentation extension. Capabilities are handled
@@ -115,13 +116,15 @@ static struct {
 	  "\x40\x48\xb7\xd5\x6e\xbc\xe8\x85\x25\xe7\xde\x7f\x00\xd6\xc2\xd3\x80\x00\x00\x00"},
 
 	/* Windows peers send this VID and a version number */
-	{ "MS NT5 ISAKMPOAKLEY", EXT_MS_WINDOWS, FALSE, TRUE, 20,
+	{ "MS NT5 ISAKMPOAKLEY", EXT_MS_WINDOWS, FALSE, TRUE, 16,
 	  "\x1e\x2b\x51\x69\x05\x99\x1c\x7d\x7c\x96\xfc\xbf\xb5\x87\xe4\x61\x00\x00\x00\x00"},
 
-	{ "Cisco VPN Concentrator", 0, FALSE, TRUE, 16,
-	  "\x1f\x07\xf7\x0e\xaa\x65\x14\xd3\xb0\xfa\x96\x54\x2a"},
+	/* Truncated MD5("ALTIGA GATEWAY") plus two version bytes */
+	{ "Cisco VPN Concentrator", 0, FALSE, TRUE, 14,
+	  "\x1f\x07\xf7\x0e\xaa\x65\x14\xd3\xb0\xfa\x96\x54\x2a\x50\x00\x00"},
 
-	{ "Cisco VPN 3000 client", 0, FALSE, FALSE, 20,
+	/* MD5("ALTIGA NETWORKS") */
+	{ "Cisco VPN 3000 client", 0, FALSE, FALSE, 16,
 	  "\xf6\xf7\xef\xc7\xf5\xae\xb8\xcb\x15\x8c\xb9\xd0\x94\xba\x69\xe7"},
 
 	{ "KAME/racoon", 0, FALSE, FALSE, 16,
@@ -174,11 +177,11 @@ static struct {
 	  "\xf4\xed\x19\xe0\xc1\x14\xeb\x51\x6f\xaa\xac\x0e\xe3\x7d\xaf\x28\x07\xb4\x38\x1f"},
 
 	/* Juniper SRX and Netscreen devices send this VID and a version number */
-	{ "NetScreen Technologies", 0, NULL, TRUE, 20,
+	{ "NetScreen Technologies", 0, FALSE, TRUE, 20,
 	  "\x69\x93\x69\x22\x87\x41\xc6\xd4\xca\x09\x4c\x93\xe2\x42\xc9\xde\x19\xe7\xb7\xc6"},
 
 	/* Probably the Juniper SRX VID */
-	{ "Juniper SRX", 0, NULL, FALSE, 20,
+	{ "Juniper SRX", 0, FALSE, FALSE, 20,
 	  "\xfd\x80\x88\x04\xdf\x73\xb1\x51\x50\x70\x9d\x87\x80\x44\xcd\xe0\xac\x1e\xfc\xde"},
 
 }, vendor_natt_ids[] = {
@@ -186,7 +189,7 @@ static struct {
 	/* NAT-Traversal VIDs ordered by preference */
 
 	/* NAT-Traversal, MD5("RFC 3947") */
-	{ "NAT-T (RFC 3947)", EXT_NATT, FALSE, TRUE, 16,
+	{ "NAT-T (RFC 3947)", EXT_NATT, TRUE, FALSE, 16,
 	  "\x4a\x13\x1c\x81\x07\x03\x58\x45\x5c\x57\x28\xf2\x0e\x95\x45\x2f"},
 
 	{ "draft-ietf-ipsec-nat-t-ike-03", EXT_NATT | EXT_NATT_DRAFT_02_03,
@@ -198,7 +201,7 @@ static struct {
 	  "\xcd\x60\x46\x43\x35\xdf\x21\xf8\x7c\xfd\xb2\xfc\x68\xb6\xa4\x48"},
 
 	{ "draft-ietf-ipsec-nat-t-ike-02\\n", EXT_NATT | EXT_NATT_DRAFT_02_03,
-	  FALSE, TRUE, 16,
+	  TRUE, FALSE, 16,
 	  "\x90\xcb\x80\x91\x3e\xbb\x69\x6e\x08\x63\x81\xb5\xec\x42\x7b\x1f"},
 
 	{ "draft-ietf-ipsec-nat-t-ike-08", 0, FALSE, FALSE, 16,
@@ -240,18 +243,24 @@ static const uint32_t fragmentation_ike = 0x80000000;
 
 static bool is_known_vid(chunk_t data, int i)
 {
-	if (vendor_ids[i].extension == EXT_IKE_FRAGMENTATION)
+	switch (vendor_ids[i].extension)
 	{
-		if (data.len >= 16 && memeq(data.ptr, vendor_ids[i].id, 16))
-		{
-			switch (data.len)
+		case EXT_IKE_FRAGMENTATION:
+			if (data.len >= 16 && memeq(data.ptr, vendor_ids[i].id, 16))
 			{
-				case 16:
-					return TRUE;
-				case 20:
-					return untoh32(&data.ptr[16]) & fragmentation_ike;
+				switch (data.len)
+				{
+					case 16:
+						return TRUE;
+					case 20:
+						return untoh32(&data.ptr[16]) & fragmentation_ike;
+				}
 			}
-		}
+			return FALSE;
+		case EXT_CISCO_UNITY:
+			return data.len == 16 && memeq(data.ptr, vendor_ids[i].id, 14);
+		default:
+			break;
 	}
 	if (vendor_ids[i].prefix)
 	{

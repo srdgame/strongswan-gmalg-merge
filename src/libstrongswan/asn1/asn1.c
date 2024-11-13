@@ -2,7 +2,8 @@
  * Copyright (C) 2006 Martin Will
  * Copyright (C) 2000-2016 Andreas Steffen
  *
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -547,9 +548,10 @@ void asn1_debug_simple_object(chunk_t object, asn1_t type, bool private)
 		case ASN1_UTCTIME:
 		case ASN1_GENERALIZEDTIME:
 			{
+#if DEBUG_LEVEL >= 2
 				time_t time = asn1_to_time(&object, type);
-
 				DBG2(DBG_ASN, "  '%T'", &time, TRUE);
+#endif
 			}
 			return;
 		default:
@@ -637,58 +639,44 @@ chunk_t asn1_integer_from_uint64(uint64_t val)
 	return chunk_clone(enc);
 }
 
-/**
- * ASN.1 definition of an algorithmIdentifier
- */
-static const asn1Object_t algorithmIdentifierObjects[] = {
-	{ 0, "algorithmIdentifier",	ASN1_SEQUENCE,		ASN1_NONE			}, /* 0 */
-	{ 1,   "algorithm",			ASN1_OID,			ASN1_BODY			}, /* 1 */
-	{ 1,   "parameters",		ASN1_OID,			ASN1_RAW|ASN1_OPT	}, /* 2 */
-	{ 1,   "end opt",			ASN1_EOC,			ASN1_END			}, /* 3 */
-	{ 1,   "parameters",		ASN1_SEQUENCE,		ASN1_RAW|ASN1_OPT	}, /* 4 */
-	{ 1,   "end opt",			ASN1_EOC,			ASN1_END			}, /* 5 */
-	{ 1,   "parameters",		ASN1_OCTET_STRING,	ASN1_RAW|ASN1_OPT	}, /* 6 */
-	{ 1,   "end opt",			ASN1_EOC,			ASN1_END			}, /* 7 */
-	{ 0, "exit",				ASN1_EOC,			ASN1_EXIT			}
-};
-#define ALGORITHM_ID_ALG				1
-#define ALGORITHM_ID_PARAMETERS_OID		2
-#define ALGORITHM_ID_PARAMETERS_SEQ		4
-#define ALGORITHM_ID_PARAMETERS_OCT		6
-
 /*
- * Defined in header
+ * Described in header
  */
 int asn1_parse_algorithmIdentifier(chunk_t blob, int level0, chunk_t *parameters)
 {
-	asn1_parser_t *parser;
 	chunk_t object;
-	int objectID;
 	int alg = OID_UNKNOWN;
 
-	parser = asn1_parser_create(algorithmIdentifierObjects, blob);
-	parser->set_top_level(parser, level0);
-
-	while (parser->iterate(parser, &objectID, &object))
+	if (asn1_unwrap(&blob, &blob) == ASN1_SEQUENCE)
 	{
-		switch (objectID)
+		if (level0 >= 0)
 		{
-			case ALGORITHM_ID_ALG:
-				alg = asn1_known_oid(object);
-				break;
-			case ALGORITHM_ID_PARAMETERS_OID:
-			case ALGORITHM_ID_PARAMETERS_SEQ:
-			case ALGORITHM_ID_PARAMETERS_OCT:
-				if (parameters != NULL)
+			DBG2(DBG_ASN, "L%d - algorithmIdentifier:", level0);
+		}
+
+		if (asn1_unwrap(&blob, &object) == ASN1_OID)
+		{
+			if (level0 >= 0)
+			{
+				DBG2(DBG_ASN, "L%d - algorithm:", level0+1);
+				asn1_debug_simple_object(object, ASN1_OID, FALSE);
+			}
+			alg = asn1_known_oid(object);
+
+			if (blob.len)
+			{
+				if (level0 >= 0)
 				{
-					*parameters = object;
+					DBG2(DBG_ASN, "L%d - parameters:", level0+1);
+					DBG3(DBG_ASN, "%B", &blob);
 				}
-				break;
-			default:
-				break;
+				if (parameters)
+				{
+					*parameters = blob;
+				}
+			}
 		}
 	}
-	parser->destroy(parser);
 	return alg;
 }
 

@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2010 Martin Willi
- * Copyright (C) 2010 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -193,11 +194,13 @@ static bool exchange(private_tls_socket_t *this, bool wr, bool block)
 				case SUCCESS:
 					return TRUE;
 				default:
-					if (wr)
-					{
-						return FALSE;
+					if (!wr && this->app.in_done > 0)
+					{	/* return data after proper termination via fatal close
+						 * notify to which we responded with one */
+						this->eof = TRUE;
+						return TRUE;
 					}
-					break;
+					return FALSE;
 			}
 			break;
 		}

@@ -11,11 +11,11 @@ crypto/hashers/hash_algorithm_set.c crypto/proposal/proposal.c \
 crypto/proposal/proposal_keywords.c crypto/proposal/proposal_keywords_static.c \
 crypto/prfs/prf.c crypto/prfs/mac_prf.c crypto/pkcs5.c \
 crypto/rngs/rng.c crypto/rngs/rng_tester.c \
-crypto/prf_plus.c crypto/signers/signer.c \
+crypto/signers/signer.c \
 crypto/signers/mac_signer.c crypto/crypto_factory.c crypto/crypto_tester.c \
-crypto/diffie_hellman.c crypto/aead.c crypto/transform.c \
+crypto/key_exchange.c crypto/aead.c crypto/transform.c \
 crypto/iv/iv_gen.c crypto/iv/iv_gen_rand.c crypto/iv/iv_gen_seq.c \
-crypto/iv/iv_gen_null.c \
+crypto/iv/iv_gen_null.c crypto/kdfs/kdf.c \
 crypto/xofs/xof.c crypto/xofs/xof_bitspender.c \
 credentials/credential_factory.c credentials/builder.c \
 credentials/cred_encoding.c credentials/keys/private_key.c \
@@ -23,14 +23,16 @@ credentials/keys/public_key.c credentials/keys/shared_key.c \
 credentials/keys/signature_params.c \
 credentials/certificates/certificate.c credentials/certificates/crl.c \
 credentials/certificates/ocsp_response.c credentials/certificates/x509.c \
+credentials/certificates/ocsp_single_response.c \
 credentials/certificates/certificate_printer.c \
 credentials/containers/container.c credentials/containers/pkcs12.c \
-credentials/credential_manager.c \
+credentials/credential_manager.c credentials/ocsp_responders.c \
 credentials/sets/auth_cfg_wrapper.c credentials/sets/ocsp_response_wrapper.c \
 credentials/sets/cert_cache.c credentials/sets/mem_cred.c \
 credentials/sets/callback_cred.c credentials/auth_cfg.c database/database.c \
 database/database_factory.c fetcher/fetcher.c fetcher/fetcher_manager.c eap/eap.c \
 ipsec/ipsec_types.c \
+metadata/metadata_factory.c metadata/metadata_int.c metadata/metadata_set.c \
 networking/host.c networking/host_resolver.c networking/packet.c \
 networking/tun_device.c networking/streams/stream_manager.c \
 networking/streams/stream.c networking/streams/stream_service.c \
@@ -38,7 +40,8 @@ networking/streams/stream_tcp.c networking/streams/stream_service_tcp.c \
 pen/pen.c plugins/plugin_loader.c plugins/plugin_feature.c processing/jobs/job.c \
 processing/jobs/callback_job.c processing/processor.c processing/scheduler.c \
 processing/watcher.c resolver/resolver_manager.c resolver/rr_set.c \
-selectors/traffic_selector.c settings/settings.c settings/settings_types.c \
+selectors/sec_label.c selectors/traffic_selector.c \
+settings/settings.c settings/settings_types.c \
 settings/settings_parser.y settings/settings_lexer.l utils/cpu_feature.c \
 utils/utils.c utils/chunk.c utils/debug.c utils/enum.c utils/identification.c \
 utils/lexparser.c utils/optionsfrom.c utils/capabilities.c utils/backtrace.c \
@@ -76,11 +79,12 @@ crypto/hashers/hash_algorithm_set.h crypto/mac.h crypto/proposal/proposal.h \
 crypto/proposal/proposal_keywords.h crypto/proposal/proposal_keywords_static.h \
 crypto/rngs/rng.h crypto/rngs/rng_tester.h \
 crypto/prfs/prf.h crypto/prfs/mac_prf.h crypto/nonce_gen.h \
-crypto/prf_plus.h crypto/signers/signer.h crypto/signers/mac_signer.h \
-crypto/crypto_factory.h crypto/crypto_tester.h crypto/diffie_hellman.h \
+crypto/signers/signer.h crypto/signers/mac_signer.h \
+crypto/crypto_factory.h crypto/crypto_tester.h crypto/key_exchange.h \
 crypto/aead.h crypto/transform.h crypto/pkcs5.h crypto/iv/iv_gen.h \
 crypto/iv/iv_gen_rand.h crypto/iv/iv_gen_seq.h crypto/iv/iv_gen_null.h \
 crypto/xofs/xof.h crypto/xofs/xof_bitspender.h crypto/xofs/mgf1.h \
+crypto/kdfs/kdf.h \
 credentials/credential_factory.h credentials/builder.h \
 credentials/cred_encoding.h credentials/keys/private_key.h \
 credentials/keys/public_key.h credentials/keys/shared_key.h \
@@ -88,17 +92,22 @@ credentials/keys/signature_params.h \
 credentials/certificates/certificate.h credentials/certificates/x509.h \
 credentials/certificates/ac.h credentials/certificates/crl.h \
 credentials/certificates/pkcs10.h credentials/certificates/ocsp_request.h \
+credentials/certificates/ocsp_single_response.h \
 credentials/certificates/ocsp_response.h \
 credentials/certificates/pgp_certificate.h \
 credentials/certificates/certificate_printer.h \
 credentials/containers/container.h credentials/containers/pkcs7.h \
 credentials/containers/pkcs12.h \
-credentials/credential_manager.h credentials/sets/auth_cfg_wrapper.h \
-credentials/sets/ocsp_response_wrapper.h credentials/sets/cert_cache.h \
-credentials/sets/mem_cred.h credentials/sets/callback_cred.h \
-credentials/auth_cfg.h credentials/credential_set.h credentials/cert_validator.h \
+credentials/credential_manager.h credentials/ocsp_responders.h \
+credentials/ocsp_responder.h \
+credentials/sets/auth_cfg_wrapper.h credentials/sets/ocsp_response_wrapper.h \
+credentials/sets/cert_cache.h credentials/sets/mem_cred.h \
+credentials/sets/callback_cred.h credentials/auth_cfg.h \
+credentials/credential_set.h credentials/cert_validator.h \
 database/database.h database/database_factory.h fetcher/fetcher.h \
 fetcher/fetcher_manager.h eap/eap.h pen/pen.h ipsec/ipsec_types.h \
+metadata/metadata.h metadata/metadata_factory.h metadata/metadata_int.h \
+metadata/metadata_set.h \
 networking/host.h networking/host_resolver.h networking/packet.h \
 networking/tun_device.h networking/streams/stream.h \
 networking/streams/stream_unix.h networking/streams/stream_service_unix.h \
@@ -109,7 +118,8 @@ resolver/resolver.h resolver/resolver_response.h resolver/rr_set.h \
 resolver/rr.h resolver/resolver_manager.h \
 plugins/plugin_loader.h plugins/plugin.h plugins/plugin_feature.h \
 processing/jobs/job.h processing/jobs/callback_job.h processing/processor.h \
-processing/scheduler.h processing/watcher.h selectors/traffic_selector.h \
+processing/scheduler.h processing/watcher.h \
+selectors/sec_label.h selectors/traffic_selector.h \
 settings/settings.h settings/settings_parser.h threading/thread_value.h \
 threading/thread.h threading/windows/thread.h \
 threading/mutex.h threading/condvar.h threading/spinlock.h threading/semaphore.h \
@@ -129,7 +139,8 @@ library.lo :	$(top_builddir)/config.status
 
 libstrongswan_la_LIBADD = \
 	$(DLLIB) $(ATOMICLIB)  $(BTLIB) $(SOCKLIB) \
-	$(RTLIB) $(BFDLIB) $(UNWINDLIB)
+	$(RTLIB) $(BFDLIB) $(UNWINDLIB) \
+	$(selinux_LIBS)
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/libstrongswan \
@@ -139,6 +150,7 @@ AM_CPPFLAGS = \
 	-DSTRONGSWAN_CONF=\"${strongswan_conf}\"
 
 AM_CFLAGS = \
+	$(selinux_CFLAGS) \
 	@COVERAGE_CFLAGS@
 
 AM_LDFLAGS = \
@@ -387,6 +399,13 @@ if MONOLITHIC
 endif
 endif
 
+if USE_KDF
+  SUBDIRS += plugins/kdf
+if MONOLITHIC
+  libstrongswan_la_LIBADD += plugins/kdf/libstrongswan-kdf.la
+endif
+endif
+
 if USE_CMAC
   SUBDIRS += plugins/cmac
 if MONOLITHIC
@@ -461,6 +480,13 @@ if USE_PKCS12
   SUBDIRS += plugins/pkcs12
 if MONOLITHIC
   libstrongswan_la_LIBADD += plugins/pkcs12/libstrongswan-pkcs12.la
+endif
+endif
+
+if USE_OPENXPKI
+  SUBDIRS += plugins/openxpki
+if MONOLITHIC
+  libstrongswan_la_LIBADD += plugins/openxpki/libstrongswan-openxpki.la
 endif
 endif
 

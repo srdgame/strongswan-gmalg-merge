@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2014 Martin Willi
- * Copyright (C) 2014 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -285,7 +286,7 @@ static int load_pools(vici_conn_t *conn)
 
 	ret = load_pools_cfg(conn, format, cfg);
 
-	cfg->destroy(cfg);
+	cfg->destroy_clear(cfg);
 
 	return ret;
 }

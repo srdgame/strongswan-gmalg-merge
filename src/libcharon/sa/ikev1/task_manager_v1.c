@@ -1,7 +1,8 @@
 /*
  * Copyright (C) 2007-2019 Tobias Brunner
  * Copyright (C) 2007-2011 Martin Willi
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -195,37 +196,9 @@ struct private_task_manager_t {
 	message_t *queued;
 
 	/**
-	 * Number of times we retransmit messages before giving up
+	 * Retransmision settings.
 	 */
-	u_int retransmit_tries;
-
-	/**
-	 * Maximum number of tries possible with current retransmission settings
-	 * before overflowing the range of uint32_t, which we use for the timeout.
-	 * Note that UINT32_MAX milliseconds equal nearly 50 days, so that doesn't
-	 * make much sense without retransmit_limit anyway.
-	 */
-	u_int retransmit_tries_max;
-
-	/**
-	 * Retransmission timeout
-	 */
-	double retransmit_timeout;
-
-	/**
-	 * Base to calculate retransmission timeout
-	 */
-	double retransmit_base;
-
-	/**
-	 * Jitter to apply to calculated retransmit timeout (in percent)
-	 */
-	u_int retransmit_jitter;
-
-	/**
-	 * Limit retransmit timeout to this value
-	 */
-	uint32_t retransmit_limit;
+	retransmission_t retransmit;
 
 	/**
 	 * Sequence number for sending DPD requests
@@ -363,30 +336,16 @@ static status_t retransmit_packet(private_task_manager_t *this, uint32_t seqnr,
 							u_int mid, u_int retransmitted, array_t *packets)
 {
 	packet_t *packet;
-	uint32_t t = UINT32_MAX, max_jitter;
+	uint32_t t;
 
 	array_get(packets, 0, &packet);
-	if (retransmitted > this->retransmit_tries)
+	if (retransmitted > this->retransmit.tries)
 	{
 		DBG1(DBG_IKE, "giving up after %u retransmits", retransmitted - 1);
 		charon->bus->alert(charon->bus, ALERT_RETRANSMIT_SEND_TIMEOUT, packet);
 		return DESTROY_ME;
 	}
-	if (!this->retransmit_tries_max ||
-		retransmitted <= this->retransmit_tries_max)
-	{
-		t = (uint32_t)(this->retransmit_timeout * 1000.0 *
-						pow(this->retransmit_base, retransmitted));
-	}
-	if (this->retransmit_limit)
-	{
-		t = min(t, this->retransmit_limit);
-	}
-	if (this->retransmit_jitter)
-	{
-		max_jitter = (t / 100.0) * this->retransmit_jitter;
-		t -= max_jitter * (random() / (RAND_MAX + 1.0));
-	}
+	t = retransmission_timeout(&this->retransmit, retransmitted, TRUE);
 	if (retransmitted)
 	{
 		DBG1(DBG_IKE, "sending retransmit %u of %s message ID %u, seq %u",
@@ -487,7 +446,7 @@ METHOD(task_manager_t, initiate, status_t,
 	message_t *message;
 	host_t *me, *other;
 	exchange_type_t exchange = EXCHANGE_TYPE_UNDEFINED;
-	bool new_mid = FALSE, expect_response = FALSE, cancelled = FALSE, keep = FALSE;
+	bool new_mid = FALSE, expect_response = FALSE, canceled = FALSE, keep = FALSE;
 
 	if (this->initiating.type != EXCHANGE_TYPE_UNDEFINED &&
 		this->initiating.type != INFORMATIONAL_V1)
@@ -672,7 +631,7 @@ METHOD(task_manager_t, initiate, status_t,
 				/* processed, but task needs another exchange */
 				continue;
 			case ALREADY_DONE:
-				cancelled = TRUE;
+				canceled = TRUE;
 				break;
 			case FAILED:
 			default:
@@ -697,7 +656,7 @@ METHOD(task_manager_t, initiate, status_t,
 	{	/* tasks completed, no exchange active anymore */
 		this->initiating.type = EXCHANGE_TYPE_UNDEFINED;
 	}
-	if (cancelled)
+	if (canceled)
 	{
 		message->destroy(message);
 		return initiate(this);
@@ -754,7 +713,7 @@ static status_t build_response(private_task_manager_t *this, message_t *request)
 	task_t *task;
 	message_t *message;
 	host_t *me, *other;
-	bool delete = FALSE, cancelled = FALSE, expect_request = FALSE;
+	bool delete = FALSE, canceled = FALSE, expect_request = FALSE;
 
 	me = request->get_destination(request);
 	other = request->get_source(request);
@@ -791,7 +750,7 @@ static status_t build_response(private_task_manager_t *this, message_t *request)
 				}
 				continue;
 			case ALREADY_DONE:
-				cancelled = TRUE;
+				canceled = TRUE;
 				break;
 			case INVALID_ARG:
 				if (task->get_type(task) == TASK_QUICK_MODE)
@@ -813,7 +772,7 @@ static status_t build_response(private_task_manager_t *this, message_t *request)
 	enumerator->destroy(enumerator);
 
 	clear_packets(this->responding.packets);
-	if (cancelled)
+	if (canceled)
 	{
 		message->destroy(message);
 		return initiate(this);
@@ -1685,7 +1644,7 @@ METHOD(task_manager_t, queue_ike_reauth, void,
 		enumerator->destroy(enumerator);
 	}
 
-	if (new->initiate(new, NULL, 0, NULL, NULL) != DESTROY_ME)
+	if (new->initiate(new, NULL, NULL) != DESTROY_ME)
 	{
 		charon->ike_sa_manager->checkin(charon->ike_sa_manager, new);
 		this->ike_sa->set_state(this->ike_sa, IKE_REKEYING);
@@ -1732,14 +1691,19 @@ METHOD(task_manager_t, queue_mobike, void,
 }
 
 METHOD(task_manager_t, queue_child, void,
-	private_task_manager_t *this, child_cfg_t *cfg, uint32_t reqid,
-	traffic_selector_t *tsi, traffic_selector_t *tsr)
+	private_task_manager_t *this, child_cfg_t *cfg, child_init_args_t *args)
 {
 	quick_mode_t *task;
 
-	task = quick_mode_create(this->ike_sa, cfg, tsi, tsr);
-	task->use_reqid(task, reqid);
-
+	if (args)
+	{
+		task = quick_mode_create(this->ike_sa, cfg, args->src, args->dst);
+		task->use_reqid(task, args->reqid);
+	}
+	else
+	{
+		task = quick_mode_create(this->ike_sa, cfg, NULL, NULL);
+	}
 	queue_task(this, &task->task);
 }
 
@@ -1827,6 +1791,7 @@ METHOD(task_manager_t, queue_child_rekey, void,
 	child_sa_t *child_sa;
 	child_cfg_t *cfg;
 	quick_mode_t *task;
+	uint32_t reqid;
 
 	child_sa = this->ike_sa->get_child_sa(this->ike_sa, protocol, spi, TRUE);
 	if (!child_sa)
@@ -1852,7 +1817,12 @@ METHOD(task_manager_t, queue_child_rekey, void,
 			cfg = child_sa->get_config(child_sa);
 			task = quick_mode_create(this->ike_sa, cfg->get_ref(cfg),
 				get_first_ts(child_sa, TRUE), get_first_ts(child_sa, FALSE));
-			task->use_reqid(task, child_sa->get_reqid(child_sa));
+			reqid = child_sa->get_reqid_ref(child_sa);
+			if (reqid)
+			{
+				task->use_reqid(task, reqid);
+				charon->kernel->release_reqid(charon->kernel, reqid);
+			}
 			task->use_marks(task, child_sa->get_mark(child_sa, TRUE).value,
 							child_sa->get_mark(child_sa, FALSE).value);
 			task->use_if_ids(task, child_sa->get_if_id(child_sa, TRUE),
@@ -1887,10 +1857,9 @@ METHOD(task_manager_t, queue_dpd, void,
 	if (t == 0)
 	{
 		/* use the same timeout as a retransmitting IKE message would have */
-		for (retransmit = 0; retransmit <= this->retransmit_tries; retransmit++)
+		for (retransmit = 0; retransmit <= this->retransmit.tries; retransmit++)
 		{
-			t += (uint32_t)(this->retransmit_timeout * 1000.0 *
-							pow(this->retransmit_base, retransmit));
+			t += retransmission_timeout(&this->retransmit, retransmit, FALSE);
 		}
 	}
 	/* compensate for the already elapsed dpd delay */
@@ -2126,16 +2095,6 @@ task_manager_v1_t *task_manager_v1_create(ike_sa_t *ike_sa)
 		.queued_tasks = linked_list_create(),
 		.active_tasks = linked_list_create(),
 		.passive_tasks = linked_list_create(),
-		.retransmit_tries = lib->settings->get_int(lib->settings,
-					"%s.retransmit_tries", RETRANSMIT_TRIES, lib->ns),
-		.retransmit_timeout = lib->settings->get_double(lib->settings,
-					"%s.retransmit_timeout", RETRANSMIT_TIMEOUT, lib->ns),
-		.retransmit_base = lib->settings->get_double(lib->settings,
-					"%s.retransmit_base", RETRANSMIT_BASE, lib->ns),
-		.retransmit_jitter = min(lib->settings->get_int(lib->settings,
-					"%s.retransmit_jitter", 0, lib->ns), RETRANSMIT_JITTER_MAX),
-		.retransmit_limit = lib->settings->get_int(lib->settings,
-					"%s.retransmit_limit", 0, lib->ns) * 1000,
 	);
 
 	if (!this->rng)
@@ -2153,11 +2112,7 @@ task_manager_v1_t *task_manager_v1_create(ike_sa_t *ike_sa)
 	}
 	this->dpd_send &= 0x7FFFFFFF;
 
-	if (this->retransmit_base > 1)
-	{	/* based on 1000 * timeout * base^try */
-		this->retransmit_tries_max = log(UINT32_MAX/
-										 (1000.0 * this->retransmit_timeout))/
-									 log(this->retransmit_base);
-	}
+	retransmission_parse_default(&this->retransmit);
+
 	return &this->public;
 }

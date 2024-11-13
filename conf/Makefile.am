@@ -20,7 +20,6 @@ options = \
 	options/medsrv.opt \
 	options/pki.opt \
 	options/pool.opt \
-	options/scepclient.opt \
 	options/starter.opt \
 	options/swanctl.opt \
 	options/tnc.opt \
@@ -81,6 +80,7 @@ plugins = \
 	plugins/ntru.opt \
 	plugins/openssl.opt \
 	plugins/gmalg.opt \
+	plugins/openxpki.opt \
 	plugins/osx-attr.opt \
 	plugins/p-cscf.opt \
 	plugins/pkcs11.opt \

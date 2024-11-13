@@ -2,7 +2,8 @@
  * Copyright (C) 2012-2013 Tobias Brunner
  * Copyright (C) 2012 Giuliano Grassi
  * Copyright (C) 2012 Ralf Sager
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -111,6 +112,18 @@ METHOD(packet_t, set_dscp, void,
 	this->packet->set_dscp(this->packet, value);
 }
 
+METHOD(packet_t, get_metadata, metadata_t*,
+	private_esp_packet_t *this, const char *key)
+{
+	return this->packet->get_metadata(this->packet, key);
+}
+
+METHOD(packet_t, set_metadata, void,
+	private_esp_packet_t *this, const char *key, metadata_t *data)
+{
+	this->packet->set_metadata(this->packet, key, data);
+}
+
 METHOD(packet_t, skip_bytes, void,
 	private_esp_packet_t *this, size_t bytes)
 {
@@ -172,8 +185,8 @@ static bool check_padding(chunk_t padding)
 static bool remove_padding(private_esp_packet_t *this, chunk_t plaintext)
 {
 	uint8_t next_header, pad_length;
-	chunk_t padding, payload;
 	bio_reader_t *reader;
+	chunk_t padding;
 
 	reader = bio_reader_create(plaintext);
 	if (!reader->read_uint8_end(reader, &next_header) ||
@@ -196,11 +209,13 @@ static bool remove_padding(private_esp_packet_t *this, chunk_t plaintext)
 		return FALSE;
 	}
 	this->next_header = next_header;
-	payload = this->payload->get_encoding(this->payload);
 
+#if DEBUG_LEVEL >= 3
+	chunk_t encoding = this->payload->get_encoding(this->payload);
 	DBG3(DBG_ESP, "ESP payload:\n  payload %B\n  padding %B\n  "
-		 "padding length = %hhu, next header = %hhu", &payload, &padding,
+		 "padding length = %hhu, next header = %hhu", &encoding, &padding,
 		 pad_length, this->next_header);
+#endif
 	return TRUE;
 
 failed:
@@ -415,6 +430,8 @@ static private_esp_packet_t *esp_packet_create_internal(packet_t *packet)
 				.set_data = _set_data,
 				.get_dscp = _get_dscp,
 				.set_dscp = _set_dscp,
+				.get_metadata = _get_metadata,
+				.set_metadata = _set_metadata,
 				.skip_bytes = _skip_bytes,
 				.clone = _clone_,
 				.destroy = _destroy,

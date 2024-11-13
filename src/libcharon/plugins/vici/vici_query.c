@@ -1,10 +1,9 @@
 /*
  * Copyright (C) 2015-2020 Tobias Brunner
  * Copyright (C) 2015-2018 Andreas Steffen
- * HSR Hochschule fuer Technik Rapperswil
- *
  * Copyright (C) 2014 Martin Willi
- * Copyright (C) 2014 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -48,7 +47,7 @@
 #ifndef WIN32
 #include <sys/utsname.h>
 #endif
-#ifdef HAVE_MALLINFO
+#if defined(HAVE_MALLINFO2) || defined (HAVE_MALLINFO)
 #include <malloc.h>
 #endif
 
@@ -151,6 +150,29 @@ static void list_mode(vici_builder_t *b, child_sa_t *child, child_cfg_t *cfg)
 }
 
 /**
+ * List the security label of a CHILD_SA or config
+ */
+static void list_label(vici_builder_t *b, child_sa_t *child, child_cfg_t *cfg)
+{
+	sec_label_t *label = NULL;
+	chunk_t enc;
+
+	if (child)
+	{
+		label = child->get_label(child);
+	}
+	else if (cfg)
+	{
+		label = cfg->get_label(cfg);
+	}
+	if (label)
+	{
+		enc = label->get_encoding(label);
+		b->add_kv(b, "label", "%+B", &enc);
+	}
+}
+
+/**
  * List IPsec-related details about a CHILD_SA
  */
 static void list_child_ipsec(vici_builder_t *b, child_sa_t *child)
@@ -208,10 +230,10 @@ static void list_child_ipsec(vici_builder_t *b, child_sa_t *child)
 				b->add_kv(b, "integ-keysize", "%u", ks);
 			}
 		}
-		if (proposal->get_algorithm(proposal, DIFFIE_HELLMAN_GROUP,
+		if (proposal->get_algorithm(proposal, KEY_EXCHANGE_METHOD,
 									&alg, NULL))
 		{
-			b->add_kv(b, "dh-group", "%N", diffie_hellman_group_names, alg);
+			b->add_kv(b, "dh-group", "%N", key_exchange_method_names, alg);
 		}
 		if (proposal->get_algorithm(proposal, EXTENDED_SEQUENCE_NUMBERS,
 									&alg, NULL) && alg == EXT_SEQ_NUMBERS)
@@ -275,6 +297,7 @@ static void list_child(private_vici_query_t *this, vici_builder_t *b,
 	state = child->get_state(child);
 	b->add_kv(b, "state", "%N", child_sa_state_names, state);
 	list_mode(b, child, NULL);
+	list_label(b, child, NULL);
 
 	switch (state)
 	{
@@ -466,9 +489,9 @@ static void list_ike(private_vici_query_t *this, vici_builder_t *b,
 		{
 			b->add_kv(b, "prf-alg", "%N", pseudo_random_function_names, alg);
 		}
-		if (proposal->get_algorithm(proposal, DIFFIE_HELLMAN_GROUP, &alg, NULL))
+		if (proposal->get_algorithm(proposal, KEY_EXCHANGE_METHOD, &alg, NULL))
 		{
-			b->add_kv(b, "dh-group", "%N", diffie_hellman_group_names, alg);
+			b->add_kv(b, "dh-group", "%N", key_exchange_method_names, alg);
 		}
 	}
 	add_condition(b, ike_sa, "ppk", COND_PPK);
@@ -505,15 +528,16 @@ CALLBACK(list_sas, vici_message_t*,
 	ike_sa_t *ike_sa;
 	child_sa_t *child_sa;
 	time_t now;
-	char *ike;
-	u_int ike_id;
+	char *ike, *child;
+	u_int ike_id, child_id;
 	bool bl;
 	char buf[BUF_LEN];
-
 
 	bl = request->get_str(request, NULL, "noblock") == NULL;
 	ike = request->get_str(request, NULL, "ike");
 	ike_id = request->get_int(request, 0, "ike-id");
+	child = request->get_str(request, NULL, "child");
+	child_id = request->get_int(request, 0, "child-id");
 
 	isas = charon->controller->create_ike_sa_enumerator(charon->controller, bl);
 	while (isas->enumerate(isas, &ike_sa))
@@ -538,6 +562,15 @@ CALLBACK(list_sas, vici_message_t*,
 		csas = ike_sa->create_child_sa_enumerator(ike_sa);
 		while (csas->enumerate(csas, &child_sa))
 		{
+			if (child && !streq(child, child_sa->get_name(child_sa)))
+			{
+				continue;
+			}
+			if (child_id && child_sa->get_unique_id(child_sa) != child_id)
+			{
+				continue;
+			}
+
 			snprintf(buf, sizeof(buf), "%s-%u", child_sa->get_name(child_sa),
 					 child_sa->get_unique_id(child_sa));
 			b->begin_section(b, buf);
@@ -576,6 +609,7 @@ static void raise_policy(private_vici_query_t *this, u_int id, char *ike,
 	b->add_kv(b, "ike", "%s", ike);
 
 	list_mode(b, child, NULL);
+	list_label(b, child, NULL);
 
 	b->begin_list(b, "local-ts");
 	enumerator = child->create_ts_enumerator(child, TRUE);
@@ -624,6 +658,7 @@ static void raise_policy_cfg(private_vici_query_t *this, u_int id, char *ike,
 	}
 
 	list_mode(b, NULL, cfg);
+	list_label(b, NULL, cfg);
 
 	b->begin_list(b, "local-ts");
 	list = cfg->get_traffic_selectors(cfg, TRUE, NULL, NULL, FALSE);
@@ -930,6 +965,7 @@ CALLBACK(list_conns, vici_message_t*,
 			b->begin_section(b, child_cfg->get_name(child_cfg));
 
 			list_mode(b, NULL, child_cfg);
+			list_label(b, NULL, child_cfg);
 
 			lft = child_cfg->get_lifetime(child_cfg, FALSE);
 			b->add_kv(b, "rekey_time",    "%"PRIu64, lft->time.rekey);
@@ -1266,8 +1302,9 @@ CALLBACK(get_algorithms, vici_message_t*,
 	hash_algorithm_t hash;
 	pseudo_random_function_t prf;
 	ext_out_function_t xof;
+	key_derivation_function_t kdf;
 	drbg_type_t drbg;
-	diffie_hellman_group_t group;
+	key_exchange_method_t group;
 	rng_quality_t quality;
 	const char *plugin_name;
 
@@ -1327,6 +1364,15 @@ CALLBACK(get_algorithms, vici_message_t*,
 	enumerator->destroy(enumerator);
 	b->end_section(b);
 
+	b->begin_section(b, "kdf");
+	enumerator = lib->crypto->create_kdf_enumerator(lib->crypto);
+	while (enumerator->enumerate(enumerator, &kdf, &plugin_name))
+	{
+		add_algorithm(b, key_derivation_function_names, kdf, plugin_name);
+	}
+	enumerator->destroy(enumerator);
+	b->end_section(b);
+
 	b->begin_section(b, "drbg");
 	enumerator = lib->crypto->create_drbg_enumerator(lib->crypto);
 	while (enumerator->enumerate(enumerator, &drbg, &plugin_name))
@@ -1337,10 +1383,10 @@ CALLBACK(get_algorithms, vici_message_t*,
 	b->end_section(b);
 
 	b->begin_section(b, "dh");
-	enumerator = lib->crypto->create_dh_enumerator(lib->crypto);
+	enumerator = lib->crypto->create_ke_enumerator(lib->crypto);
 	while (enumerator->enumerate(enumerator, &group, &plugin_name))
 	{
-		add_algorithm(b, diffie_hellman_group_names, group, plugin_name);
+		add_algorithm(b, key_exchange_method_names, group, plugin_name);
 	}
 	enumerator->destroy(enumerator);
 	b->end_section(b);
@@ -1650,8 +1696,17 @@ CALLBACK(stats, vici_message_t*,
 	}
 #endif
 
-#ifdef HAVE_MALLINFO
 	{
+#ifdef HAVE_MALLINFO2
+		struct mallinfo2 mi = mallinfo2();
+
+		b->begin_section(b, "mallinfo");
+		b->add_kv(b, "sbrk", "%zu", mi.arena);
+		b->add_kv(b, "mmap", "%zu", mi.hblkhd);
+		b->add_kv(b, "used", "%zu", mi.uordblks);
+		b->add_kv(b, "free", "%zu", mi.fordblks);
+		b->end_section(b);
+#elif defined(HAVE_MALLINFO)
 		struct mallinfo mi = mallinfo();
 
 		b->begin_section(b, "mallinfo");
@@ -1660,8 +1715,8 @@ CALLBACK(stats, vici_message_t*,
 		b->add_kv(b, "used", "%u", mi.uordblks);
 		b->add_kv(b, "free", "%u", mi.fordblks);
 		b->end_section(b);
+#endif /* HAVE_MALLINFO(2) */
 	}
-#endif /* HAVE_MALLINFO */
 
 	return b->finalize(b);
 }

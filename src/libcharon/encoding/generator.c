@@ -2,7 +2,8 @@
  * Copyright (C) 2011 Tobias Brunner
  * Copyright (C) 2005-2009 Martin Willi
  * Copyright (C) 2005 Jan Hutter
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -205,7 +206,6 @@ static void generate_u_int_type(private_generator_t *this,
 		case U_INT_4:
 			number_of_bits = 4;
 			break;
-		case TS_TYPE:
 		case RESERVED_BYTE:
 		case SPI_SIZE:
 		case U_INT_8:
@@ -281,7 +281,6 @@ static void generate_u_int_type(private_generator_t *this,
 			}
 			break;
 		}
-		case TS_TYPE:
 		case RESERVED_BYTE:
 		case SPI_SIZE:
 		case U_INT_8:
@@ -443,20 +442,19 @@ METHOD(generator_t, get_chunk, chunk_t,
 METHOD(generator_t, generate_payload, void,
 	private_generator_t *this, payload_t *payload)
 {
-	int i, offset_start, rule_count;
+	int i, rule_count;
 	encoding_rule_t *rules;
-	payload_type_t payload_type;
-
-	this->data_struct = payload;
-	payload_type = payload->get_type(payload);
-
-	offset_start = this->out_position - this->buffer;
+#if DEBUG_LEVEL >= 2
+	int offset_start = this->out_position - this->buffer;
+#endif
 
 	if (this->debug)
 	{
 		DBG2(DBG_ENC, "generating payload of type %N",
-			 payload_type_names, payload_type);
+			 payload_type_names, payload->get_type(payload));
 	}
+
+	this->data_struct = payload;
 
 	/* each payload has its own encoding rules */
 	rule_count = payload->get_encoding_rules(payload, &rules);
@@ -478,7 +476,6 @@ METHOD(generator_t, generate_payload, void,
 			case IKE_SPI:
 			case RESERVED_BYTE:
 			case SPI_SIZE:
-			case TS_TYPE:
 			case ATTRIBUTE_TYPE:
 			case ATTRIBUTE_LENGTH:
 				generate_u_int_type(this, rules[i].type, rules[i].offset);
@@ -491,7 +488,6 @@ METHOD(generator_t, generate_payload, void,
 				this->header_length_offset = get_offset(this);
 				generate_u_int_type(this, U_INT_32, rules[i].offset);
 				break;
-			case ADDRESS:
 			case SPI:
 			case CHUNK_DATA:
 			case ENCRYPTED_DATA:
@@ -562,7 +558,7 @@ METHOD(generator_t, generate_payload, void,
 	if (this->debug)
 	{
 		DBG2(DBG_ENC, "generating %N payload finished",
-			 payload_type_names, payload_type);
+			 payload_type_names, payload->get_type(payload));
 		DBG3(DBG_ENC, "generated data for this payload %b",
 			 this->buffer + offset_start,
 			 (u_int)(this->out_position - this->buffer - offset_start));

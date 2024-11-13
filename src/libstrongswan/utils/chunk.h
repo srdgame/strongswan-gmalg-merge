@@ -1,8 +1,10 @@
 /*
  * Copyright (C) 2008-2019 Tobias Brunner
+ * Copyright (C) 2023 Andreas Steffen
  * Copyright (C) 2005-2008 Martin Willi
  * Copyright (C) 2005 Jan Hutter
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -114,7 +116,7 @@ bool chunk_write(chunk_t chunk, char *path, mode_t mask, bool force);
 bool chunk_from_fd(int fd, chunk_t *chunk);
 
 /**
- * mmap() a file to a chunk
+ * mmap() a file to a chunk.
  *
  * The returned chunk structure is allocated from heap, but it must be freed
  * through chunk_unmap(). A user may alter the chunk ptr or len, but must pass
@@ -129,15 +131,28 @@ bool chunk_from_fd(int fd, chunk_t *chunk);
 chunk_t *chunk_map(char *path, bool wr);
 
 /**
- * munmap() a chunk previously mapped with chunk_map()
+ * munmap() a chunk previously mapped with chunk_map().
  *
- * When unmapping a writeable map, the return value should be checked to
+ * When unmapping a writable map, the return value should be checked to
  * ensure changes landed on disk.
  *
  * @param chunk			pointer returned from chunk_map()
- * @return				TRUE of changes written back to file
+ * @return				TRUE if changes written back to file
  */
 bool chunk_unmap(chunk_t *chunk);
+
+/**
+ * munmap() a chunk previously mapped with chunk_map() after clearing it.
+ *
+ * @note Writable maps (i.e. created with wr = TRUE) are NOT cleared.
+ *
+ * When unmapping a writable map, the return value should be checked to
+ * ensure changes landed on disk.
+ *
+ * @param chunk         pointer returned from chunk_map()
+ * @return              TRUE if changes written back to file
+ */
+bool chunk_unmap_clear(chunk_t *chunk);
 
 /**
  * Convert a chunk of data to hex encoding.
@@ -198,6 +213,18 @@ chunk_t chunk_from_base64(chunk_t base64, char *buf);
  * @return				chunk of encoded data
  */
 chunk_t chunk_to_base32(chunk_t chunk, char *buf);
+
+/**
+ * Convert a chunk of data to decimal encoding.
+ *
+ * The resulting string is '\\0' terminated, but the chunk does not include
+ * the '\\0'. If buf is supplied, it must hold at least (chunk.len * 2.41 + 1).
+ *
+ * @param chunk         data to convert to decimal encoding
+ * @param buf           buffer to write to, NULL to malloc
+ * @return              chunk of encoded data
+ */
+chunk_t chunk_to_dec(chunk_t chunk, char *buf);
 
 /**
  * Free contents of a chunk
@@ -386,6 +413,15 @@ void chunk_hash_seed();
  * @return				hash value
  */
 uint32_t chunk_hash(chunk_t chunk);
+
+/**
+ * Same as chunk_hash() but takes a pointer to a chunk. Can be used in
+ * hashtables.
+ *
+ * @param chunk			pointer to chunk to hash
+ * @return				hash value
+ */
+uint32_t chunk_hash_ptr(chunk_t *chunk);
 
 /**
  * Incremental version of chunk_hash. Use this to hash two or more chunks.

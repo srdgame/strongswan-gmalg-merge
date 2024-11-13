@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2008 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -47,20 +48,18 @@
 bool openssl_compute_shared_key(EVP_PKEY *priv, EVP_PKEY *pub, chunk_t *shared);
 
 /**
- * Creates a hash of a given type of a chunk of data.
+ * Calculate a fingerprint from the given key (cached under it).
  *
- * Note: this function allocates memory for the hash
- *
- * @param hash_type	NID of the hash
- * @param data		the chunk of data to hash
- * @param hash		chunk that contains the hash
+ * @param key		key object
+ * @param type		encoding type
+ * @param fp		allocated fingerprint
  * @return			TRUE on success, FALSE otherwise
  */
-bool openssl_hash_chunk(int hash_type, chunk_t data, chunk_t *hash);
+bool openssl_fingerprint(EVP_PKEY *key, cred_encoding_type_t type, chunk_t *fp);
 
 /**
  * Concatenates two bignums into a chunk, thereby enforcing the length of
- * a single BIGNUM, if necessary, by pre-pending it with zeros.
+ * a single BIGNUM, if necessary, by prepending it with zeros.
  *
  * Note: this function allocates memory for the chunk
  *
@@ -127,6 +126,14 @@ chunk_t openssl_asn1_obj2chunk(const ASN1_OBJECT *asn1);
 chunk_t openssl_asn1_str2chunk(const ASN1_STRING *asn1);
 
 /**
+ * Convert an OpenSSL ASN1_INTEGER to a chunk.
+ *
+ * @param asn1		asn1 integer to convert
+ * @return			chunk, pointing into asn1 integer
+ */
+chunk_t openssl_asn1_int2chunk(const ASN1_INTEGER *asn1);
+
+/**
  * Convert an openssl X509_NAME to a identification_t of type ID_DER_ASN1_DN.
  *
  * @param name		name to convert
@@ -153,8 +160,13 @@ time_t openssl_asn1_to_time(const ASN1_TIME *time);
 /**
  * Compatibility macros
  */
-#ifdef OPENSSL_IS_BORINGSSL
+#if defined(OPENSSL_IS_BORINGSSL) && \
+	(!defined(BORINGSSL_API_VERSION) || BORINGSSL_API_VERSION < 10)
 #define EVP_PKEY_base_id(p) EVP_PKEY_type(p->type)
+#endif
+
+#ifndef OPENSSL_INIT_ENGINE_ALL_BUILTIN
+#define OPENSSL_INIT_ENGINE_ALL_BUILTIN 0
 #endif
 
 /**

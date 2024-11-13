@@ -1,9 +1,8 @@
 /*
- * Copyright (C) 2008-2019 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
- *
+ * Copyright (C) 2008-2023 Tobias Brunner
  * Copyright (C) 2010 Martin Willi
- * Copyright (C) 2010 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -117,6 +116,11 @@ struct private_kernel_interface_t {
 	linked_list_t *listeners;
 
 	/**
+	 * Reqid to assign next
+	 */
+	uint32_t next_reqid;
+
+	/**
 	 * Reqid entries indexed by reqids
 	 */
 	hashtable_t *reqids;
@@ -208,6 +212,8 @@ typedef struct {
 	uint32_t if_id_in;
 	/** outbound interface ID used for SA */
 	uint32_t if_id_out;
+	/** security label */
+	sec_label_t *label;
 	/** local traffic selectors */
 	array_t *local;
 	/** remote traffic selectors */
@@ -221,7 +227,40 @@ static void reqid_entry_destroy(reqid_entry_t *entry)
 {
 	array_destroy_offset(entry->local, offsetof(traffic_selector_t, destroy));
 	array_destroy_offset(entry->remote, offsetof(traffic_selector_t, destroy));
+	DESTROY_IF(entry->label);
 	free(entry);
+}
+
+/**
+ * Hash the additional selector properties of reqid entries
+ */
+static u_int entry_hash_selectors(reqid_entry_t *entry)
+{
+	u_int hash;
+
+	hash = chunk_hash_inc(chunk_from_thing(entry->mark_in),
+				chunk_hash_inc(chunk_from_thing(entry->mark_out),
+					chunk_hash_inc(chunk_from_thing(entry->if_id_in),
+						chunk_hash(chunk_from_thing(entry->if_id_out)))));
+	if (entry->label)
+	{
+		hash = entry->label->hash(entry->label, hash);
+	}
+	return hash;
+}
+
+/**
+ * Compare the additional selector properties of reqid entries
+ */
+static bool entry_equals_selectors(reqid_entry_t *a, reqid_entry_t *b)
+{
+	return a->mark_in.value == b->mark_in.value &&
+		   a->mark_in.mask == b->mark_in.mask &&
+		   a->mark_out.value == b->mark_out.value &&
+		   a->mark_out.mask == b->mark_out.mask &&
+		   a->if_id_in == b->if_id_in &&
+		   a->if_id_out == b->if_id_out &&
+		   sec_labels_equal(a->label, b->label);
 }
 
 /**
@@ -229,11 +268,7 @@ static void reqid_entry_destroy(reqid_entry_t *entry)
  */
 static u_int hash_reqid(reqid_entry_t *entry)
 {
-	return chunk_hash_inc(chunk_from_thing(entry->reqid),
-				chunk_hash_inc(chunk_from_thing(entry->mark_in),
-					chunk_hash_inc(chunk_from_thing(entry->mark_out),
-						chunk_hash_inc(chunk_from_thing(entry->if_id_in),
-							chunk_hash(chunk_from_thing(entry->if_id_out))))));
+	return chunk_hash(chunk_from_thing(entry->reqid));
 }
 
 /**
@@ -241,13 +276,7 @@ static u_int hash_reqid(reqid_entry_t *entry)
  */
 static bool equals_reqid(reqid_entry_t *a, reqid_entry_t *b)
 {
-	return a->reqid == b->reqid &&
-		   a->mark_in.value == b->mark_in.value &&
-		   a->mark_in.mask == b->mark_in.mask &&
-		   a->mark_out.value == b->mark_out.value &&
-		   a->mark_out.mask == b->mark_out.mask &&
-		   a->if_id_in == b->if_id_in &&
-		   a->if_id_out == b->if_id_out;
+	return a->reqid == b->reqid;
 }
 
 /**
@@ -273,11 +302,9 @@ static u_int hash_ts_array(array_t *array, u_int hash)
  */
 static u_int hash_reqid_by_ts(reqid_entry_t *entry)
 {
-	return hash_ts_array(entry->local, hash_ts_array(entry->remote,
-			chunk_hash_inc(chunk_from_thing(entry->mark_in),
-				chunk_hash_inc(chunk_from_thing(entry->mark_out),
-					chunk_hash_inc(chunk_from_thing(entry->if_id_in),
-						chunk_hash(chunk_from_thing(entry->if_id_out)))))));
+	return hash_ts_array(entry->local,
+				hash_ts_array(entry->remote,
+						 entry_hash_selectors(entry)));
 }
 
 /**
@@ -311,14 +338,12 @@ static bool ts_array_equals(array_t *a, array_t *b)
  */
 static bool equals_reqid_by_ts(reqid_entry_t *a, reqid_entry_t *b)
 {
-	return ts_array_equals(a->local, b->local) &&
-		   ts_array_equals(a->remote, b->remote) &&
-		   a->mark_in.value == b->mark_in.value &&
-		   a->mark_in.mask == b->mark_in.mask &&
-		   a->mark_out.value == b->mark_out.value &&
-		   a->mark_out.mask == b->mark_out.mask &&
-		   a->if_id_in == b->if_id_in &&
-		   a->if_id_out == b->if_id_out;
+	if (ts_array_equals(a->local, b->local) &&
+		ts_array_equals(a->remote, b->remote))
+	{
+		return entry_equals_selectors(a, b);
+	}
+	return FALSE;
 }
 
 /**
@@ -346,11 +371,9 @@ METHOD(kernel_interface_t, alloc_reqid, status_t,
 	private_kernel_interface_t *this,
 	linked_list_t *local_ts, linked_list_t *remote_ts,
 	mark_t mark_in, mark_t mark_out, uint32_t if_id_in, uint32_t if_id_out,
-	uint32_t *reqid)
+	sec_label_t *label, uint32_t *reqid)
 {
-	static uint32_t counter = 0;
 	reqid_entry_t *entry = NULL, *tmpl;
-	status_t status = SUCCESS;
 
 	INIT(tmpl,
 		.local = array_from_ts_list(local_ts),
@@ -359,6 +382,7 @@ METHOD(kernel_interface_t, alloc_reqid, status_t,
 		.mark_out = mark_out,
 		.if_id_in = if_id_in,
 		.if_id_out = if_id_out,
+		.label = label ? label->clone(label) : NULL,
 		.reqid = *reqid,
 	);
 
@@ -368,16 +392,17 @@ METHOD(kernel_interface_t, alloc_reqid, status_t,
 		/* search by reqid if given */
 		entry = this->reqids->get(this->reqids, tmpl);
 	}
-	if (entry)
+	if (entry && entry_equals_selectors(entry, tmpl))
 	{
-		/* we don't require a traffic selector match for explicit reqids,
+		/* we don't require a traffic selector match for existing reqids,
 		 * as we want to reuse a reqid for trap-triggered policies that
-		 * got narrowed during negotiation. */
+		 * got narrowed during negotiation, but we don't want to reuse the
+		 * reqid if the additional selectors (e.g. marks) are different */
 		reqid_entry_destroy(tmpl);
 	}
 	else
 	{
-		/* search by traffic selectors */
+		/* search by traffic and other selectors */
 		entry = this->reqids_by_ts->get(this->reqids_by_ts, tmpl);
 		if (entry)
 		{
@@ -389,7 +414,13 @@ METHOD(kernel_interface_t, alloc_reqid, status_t,
 			entry = tmpl;
 			if (!array_remove(this->released_reqids, ARRAY_HEAD, &entry->reqid))
 			{
-				entry->reqid = ++counter;
+				if (!this->next_reqid)
+				{
+					this->mutex->unlock(this->mutex);
+					reqid_entry_destroy(entry);
+					return OUT_OF_RES;
+				}
+				entry->reqid = this->next_reqid++;
 			}
 			this->reqids_by_ts->put(this->reqids_by_ts, entry, entry);
 			this->reqids->put(this->reqids, entry, entry);
@@ -399,47 +430,45 @@ METHOD(kernel_interface_t, alloc_reqid, status_t,
 	entry->refs++;
 	this->mutex->unlock(this->mutex);
 
-	return status;
+	return SUCCESS;
 }
 
-METHOD(kernel_interface_t, release_reqid, status_t,
-	private_kernel_interface_t *this, uint32_t reqid,
-	mark_t mark_in, mark_t mark_out, uint32_t if_id_in, uint32_t if_id_out)
+METHOD(kernel_interface_t, ref_reqid, status_t,
+	private_kernel_interface_t *this, uint32_t reqid)
 {
 	reqid_entry_t *entry, tmpl = {
 		.reqid = reqid,
-		.mark_in = mark_in,
-		.mark_out = mark_out,
-		.if_id_in = if_id_in,
-		.if_id_out = if_id_out,
 	};
 
 	this->mutex->lock(this->mutex);
-	entry = this->reqids->remove(this->reqids, &tmpl);
+	entry = this->reqids->get(this->reqids, &tmpl);
 	if (entry)
 	{
-		if (--entry->refs == 0)
-		{
-			array_insert_create_value(&this->released_reqids, sizeof(uint32_t),
-									  ARRAY_TAIL, &entry->reqid);
-			entry = this->reqids_by_ts->remove(this->reqids_by_ts, entry);
-			if (entry)
-			{
-				reqid_entry_destroy(entry);
-			}
-		}
-		else
-		{
-			this->reqids->put(this->reqids, entry, entry);
-		}
+		entry->refs++;
 	}
 	this->mutex->unlock(this->mutex);
+	return entry ? SUCCESS : NOT_FOUND;
+}
 
-	if (entry)
+METHOD(kernel_interface_t, release_reqid, status_t,
+	private_kernel_interface_t *this, uint32_t reqid)
+{
+	reqid_entry_t *entry, tmpl = {
+		.reqid = reqid,
+	};
+
+	this->mutex->lock(this->mutex);
+	entry = this->reqids->get(this->reqids, &tmpl);
+	if (entry && --entry->refs == 0)
 	{
-		return SUCCESS;
+		array_insert_create_value(&this->released_reqids, sizeof(uint32_t),
+								  ARRAY_TAIL, &entry->reqid);
+		this->reqids->remove(this->reqids, entry);
+		this->reqids_by_ts->remove(this->reqids_by_ts, entry);
+		reqid_entry_destroy(entry);
 	}
-	return NOT_FOUND;
+	this->mutex->unlock(this->mutex);
+	return entry ? SUCCESS : NOT_FOUND;
 }
 
 METHOD(kernel_interface_t, add_sa, status_t,
@@ -827,7 +856,7 @@ METHOD(kernel_interface_t, remove_listener, void,
 
 METHOD(kernel_interface_t, acquire, void,
 	private_kernel_interface_t *this, uint32_t reqid,
-	traffic_selector_t *src_ts, traffic_selector_t *dst_ts)
+	kernel_acquire_data_t *data)
 {
 	kernel_listener_t *listener;
 	enumerator_t *enumerator;
@@ -835,8 +864,7 @@ METHOD(kernel_interface_t, acquire, void,
 	enumerator = this->listeners->create_enumerator(this->listeners);
 	while (enumerator->enumerate(enumerator, &listener))
 	{
-		if (listener->acquire &&
-			!listener->acquire(listener, reqid, src_ts, dst_ts))
+		if (listener->acquire && !listener->acquire(listener, reqid, data))
 		{
 			this->listeners->remove_at(this->listeners, enumerator);
 		}
@@ -1028,6 +1056,7 @@ kernel_interface_t *kernel_interface_create()
 			.get_spi = _get_spi,
 			.get_cpi = _get_cpi,
 			.alloc_reqid = _alloc_reqid,
+			.ref_reqid = _ref_reqid,
 			.release_reqid = _release_reqid,
 			.add_sa = _add_sa,
 			.update_sa = _update_sa,
@@ -1078,6 +1107,8 @@ kernel_interface_t *kernel_interface_create()
 								   (hashtable_equals_t)equals_reqid, 8),
 		.reqids_by_ts = hashtable_create((hashtable_hash_t)hash_reqid_by_ts,
 								   (hashtable_equals_t)equals_reqid_by_ts, 8),
+		.next_reqid = lib->settings->get_int(lib->settings, "%s.reqid_base", 1,
+											 lib->ns) ?: 1,
 	);
 
 	ifaces = lib->settings->get_str(lib->settings,

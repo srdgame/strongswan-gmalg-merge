@@ -1,8 +1,10 @@
 /*
  * Copyright (C) 2008-2019 Tobias Brunner
+ * Copyright (C) 2023 Andreas Steffen
  * Copyright (C) 2005-2006 Martin Willi
  * Copyright (C) 2005 Jan Hutter
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -396,9 +398,9 @@ chunk_t *chunk_map(char *path, bool wr)
 }
 
 /**
- * See header.
+ * Unmap the given chunk and optionally clear it
  */
-bool chunk_unmap(chunk_t *public)
+static bool chunk_unmap_internal(chunk_t *public, bool clear)
 {
 	mmaped_chunk_t *chunk;
 	bool ret = FALSE;
@@ -408,6 +410,10 @@ bool chunk_unmap(chunk_t *public)
 #ifdef HAVE_MMAP
 	if (chunk->map && chunk->map != MAP_FAILED)
 	{
+		if (!chunk->wr && clear)
+		{
+			memwipe(chunk->map, chunk->len);
+		}
 		ret = munmap(chunk->map, chunk->len) == 0;
 		tmp = errno;
 	}
@@ -436,6 +442,10 @@ bool chunk_unmap(chunk_t *public)
 	{
 		ret = TRUE;
 	}
+	if (clear)
+	{
+		memwipe(chunk->map, chunk->len);
+	}
 	free(chunk->map);
 #endif /* !HAVE_MMAP */
 	close(chunk->fd);
@@ -443,6 +453,22 @@ bool chunk_unmap(chunk_t *public)
 	errno = tmp;
 
 	return ret;
+}
+
+/*
+ * Described in header
+ */
+bool chunk_unmap(chunk_t *public)
+{
+	return chunk_unmap_internal(public, FALSE);
+}
+
+/*
+ * Described in header
+ */
+bool chunk_unmap_clear(chunk_t *public)
+{
+	return chunk_unmap_internal(public, TRUE);
 }
 
 /** hex conversion digits */
@@ -722,6 +748,71 @@ chunk_t chunk_to_base32(chunk_t chunk, char *buf)
 /**
  * Described in header.
  */
+chunk_t chunk_to_dec(chunk_t chunk, char *buf)
+{
+	int len, i, i_buf, i_bin = 0;
+	uint16_t remainder;
+	chunk_t bin;
+
+	/* Determine the number of needed decimal digits:
+	 * 10^len > 2^(8*chunk.len)       =>
+	 *    len > log(256) * chunk.len  =>
+	 *    len >   2.4083 * chunk.len
+	 */
+	len = (int)(2.4083 * (double)chunk.len) + 1;
+
+	if (!buf)
+	{
+		buf = malloc(len + 1);
+	}
+	i_buf = len;
+	buf[i_buf] = '\0';
+	bin = chunk_clone(chunk);
+	while (i_bin < bin.len)
+	{
+		remainder = 0;
+		for (i = i_bin; i < bin.len; i++)
+		{
+			remainder = bin.ptr[i] + (remainder << 8);
+			if (remainder < 10)
+			{
+				remainder = bin.ptr[i];
+				bin.ptr[i] = 0;
+				if (i == i_bin)
+				{
+					i_bin++;
+				}
+			}
+			else
+			{
+				bin.ptr[i] = remainder / 10;
+				remainder %= 10;
+			}
+		}
+		if (i_buf > 0)
+		{
+			buf[--i_buf] = 0x30 + remainder;
+		}
+	}
+	chunk_free(&bin);
+
+	/* align decimal number to the start of the string */
+	if (i_buf > 0)
+	{
+		len -= i_buf;
+
+		for (i = 0; i <= len; i++)
+		{
+			buf[i] = buf[i + i_buf];
+		}
+	}
+
+	return chunk_create(buf, len);
+}
+
+/**
+ * Described in header.
+ */
 int chunk_compare(chunk_t a, chunk_t b)
 {
 	int compare_len = a.len - b.len;
@@ -995,6 +1086,14 @@ uint32_t chunk_hash_inc(chunk_t chunk, uint32_t hash)
 uint32_t chunk_hash(chunk_t chunk)
 {
 	return chunk_mac(chunk, hash_key);
+}
+
+/*
+ * Described in header.
+ */
+uint32_t chunk_hash_ptr(chunk_t *chunk)
+{
+	return chunk_hash(*chunk);
 }
 
 /**

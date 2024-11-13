@@ -3,7 +3,7 @@
 PV  = $(SWANVERSION)
 PKG = strongswan-$(PV)
 TAR = $(PKG).tar.bz2
-SRC = http://download.strongswan.org/$(TAR)
+SRC = https://download.strongswan.org/$(TAR)
 
 # can be passed to load sources from a directory instead of a tarball
 ifneq ($(origin SRCDIR), undefined)
@@ -107,7 +107,8 @@ CONFIG_OPTS = \
 	--enable-systemd \
 	--enable-counters \
 	--enable-save-keys \
-	--enable-python-eggs
+	--enable-python-eggs \
+	--enable-wolfssl
 
 export ADA_PROJECT_PATH=/usr/local/ada/lib/gnat
 
@@ -128,6 +129,4 @@ build: configure
 
 install: build
 	cd $(BUILDDIR) && make -j install && \
-		cd $(DIR)/src/libcharon/plugins/vici/python && python setup.py install
-	# for Python-based updown scripts
-	pip install python-daemon
+		cd $(DIR)/src/libcharon/plugins/vici/python && python3 setup.py install

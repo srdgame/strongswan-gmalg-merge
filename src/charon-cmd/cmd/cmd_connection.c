@@ -1,9 +1,8 @@
 /*
  * Copyright (C) 2013 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
- *
  * Copyright (C) 2013 Martin Willi
- * Copyright (C) 2013 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -388,6 +387,8 @@ static child_cfg_t* create_child_cfg(private_cmd_connection_t *this,
 			case TS_IPV6_ADDR_RANGE:
 				has_v6 = TRUE;
 				break;
+			default:
+				continue;
 		}
 		child_cfg->add_traffic_selector(child_cfg, FALSE, ts);
 	}
@@ -438,7 +439,7 @@ static job_requeue_t initiate(private_cmd_connection_t *this)
 	child_cfg = create_child_cfg(this, peer_cfg);
 
 	if (charon->controller->initiate(charon->controller, peer_cfg, child_cfg,
-								controller_cb_empty, NULL, 0, FALSE) != SUCCESS)
+				controller_cb_empty, NULL, LEVEL_SILENT, 0, FALSE) != SUCCESS)
 	{
 		terminate(pid);
 	}
@@ -498,6 +499,7 @@ METHOD(cmd_connection_t, handle, bool,
 			this->xautheap = arg;
 			break;
 		case CMD_OPT_RSA:
+		case CMD_OPT_PRIV:
 		case CMD_OPT_AGENT:
 		case CMD_OPT_PKCS12:
 			this->key_seen = TRUE;

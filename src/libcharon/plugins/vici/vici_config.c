@@ -1,10 +1,9 @@
 /*
- * Copyright (C) 2014 Martin Willi
- * Copyright (C) 2014 revosec AG
- *
  * Copyright (C) 2015-2019 Tobias Brunner
  * Copyright (C) 2015-2018 Andreas Steffen
- * HSR Hochschule fuer Technik Rapperswil
+ * Copyright (C) 2014 Martin Willi
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -315,6 +314,7 @@ typedef struct {
 	identification_t *ppk_id;
 	bool ppk_required;
 	cert_policy_t send_cert;
+	ocsp_policy_t ocsp;
 	uint64_t dpd_delay;
 	uint64_t dpd_timeout;
 	fragmentation_t fragmentation;
@@ -371,7 +371,7 @@ static void log_auth(auth_cfg_t *auth)
 				DBG2(DBG_CFG, "   eap-type = %N", eap_type_names, v.u);
 				break;
 			case AUTH_RULE_EAP_VENDOR:
-				DBG2(DBG_CFG, "   eap-vendor = %u", v.u);
+				DBG2(DBG_CFG, "   eap-vendor = %N", pen_names, v.u);
 				break;
 			case AUTH_RULE_XAUTH_BACKEND:
 				DBG2(DBG_CFG, "   xauth = %s", v.str);
@@ -426,6 +426,7 @@ static void log_peer_data(peer_data_t *data)
 	DBG2(DBG_CFG, "  remote_port = %u", data->remote_port);
 	DBG2(DBG_CFG, "  send_certreq = %u", data->send_certreq);
 	DBG2(DBG_CFG, "  send_cert = %N", cert_policy_names, data->send_cert);
+	DBG2(DBG_CFG, "  ocsp = %N", ocsp_policy_names, data->ocsp);
 	DBG2(DBG_CFG, "  ppk_id = %Y",  data->ppk_id);
 	DBG2(DBG_CFG, "  ppk_required = %u",  data->ppk_required);
 	DBG2(DBG_CFG, "  mobike = %u", data->mobike);
@@ -521,7 +522,7 @@ typedef struct {
  */
 static void log_child_data(child_data_t *data, char *name)
 {
-	child_cfg_create_t *cfg = &data->cfg;
+	child_cfg_create_t *cfg DBG_UNUSED = &data->cfg;
 
 #define has_opt(opt) ({ (cfg->options & (opt)) == (opt); })
 	DBG2(DBG_CFG, "  child %s:", name);
@@ -563,6 +564,9 @@ static void log_child_data(child_data_t *data, char *name)
 		 cfg->set_mark_in.value, cfg->set_mark_in.mask);
 	DBG2(DBG_CFG, "   set_mark_out = %u/%u",
 		 cfg->set_mark_out.value, cfg->set_mark_out.mask);
+	DBG2(DBG_CFG, "   label = %s",
+		 cfg->label ? cfg->label->get_string(cfg->label) : NULL);
+	DBG2(DBG_CFG, "   label_mode = %N", sec_label_mode_names, cfg->label_mode);
 	DBG2(DBG_CFG, "   inactivity = %llu", cfg->inactivity);
 	DBG2(DBG_CFG, "   proposals = %#P", data->proposals);
 	DBG2(DBG_CFG, "   local_ts = %#R", data->local_ts);
@@ -585,6 +589,7 @@ static void free_child_data(child_data_t *data)
 									offsetof(traffic_selector_t, destroy));
 	data->remote_ts->destroy_offset(data->remote_ts,
 									offsetof(traffic_selector_t, destroy));
+	DESTROY_IF(data->cfg.label);
 	free(data->cfg.updown);
 	free(data->cfg.interface);
 }
@@ -1004,18 +1009,27 @@ CALLBACK(parse_action, bool,
 	action_t *out, chunk_t v)
 {
 	enum_map_t map[] = {
-		{ "start",		ACTION_RESTART	},
-		{ "restart",	ACTION_RESTART	},
-		{ "route",		ACTION_ROUTE	},
-		{ "trap",		ACTION_ROUTE	},
+		{ "start",		ACTION_START	},
+		{ "restart",	ACTION_START	},
+		{ "route",		ACTION_TRAP		},
+		{ "trap",		ACTION_TRAP		},
 		{ "none",		ACTION_NONE		},
 		{ "clear",		ACTION_NONE		},
 	};
+	char buf[BUF_LEN];
 	int d;
 
 	if (parse_map(map, countof(map), &d, v))
 	{
 		*out = d;
+		return TRUE;
+	}
+	if (!vici_stringify(v, buf, sizeof(buf)))
+	{
+		return FALSE;
+	}
+	if (enum_flags_from_string(action_names, buf, out))
+	{
 		return TRUE;
 	}
 	return FALSE;
@@ -1028,9 +1042,11 @@ CALLBACK(parse_hw_offload, bool,
 	action_t *out, chunk_t v)
 {
 	enum_map_t map[] = {
-		{ "no",		HW_OFFLOAD_NO	},
-		{ "yes",	HW_OFFLOAD_YES	},
-		{ "auto",	HW_OFFLOAD_AUTO	},
+		{ "no",		HW_OFFLOAD_NO		},
+		{ "yes",	HW_OFFLOAD_CRYPTO	},
+		{ "crypto",	HW_OFFLOAD_CRYPTO	},
+		{ "packet",	HW_OFFLOAD_PACKET	},
+		{ "auto",	HW_OFFLOAD_AUTO		},
 	};
 	int d;
 
@@ -1262,6 +1278,38 @@ CALLBACK(parse_if_id, bool,
 }
 
 /**
+ * Parse security label
+ */
+CALLBACK(parse_label, bool,
+	sec_label_t **out, chunk_t v)
+{
+	char buf[BUF_LEN];
+
+	if (!vici_stringify(v, buf, sizeof(buf)))
+	{
+		return FALSE;
+	}
+	*out = sec_label_from_string(buf);
+	return *out != NULL;
+}
+
+/**
+ * Parse security label mode
+ */
+CALLBACK(parse_label_mode, bool,
+	sec_label_mode_t *out, chunk_t v)
+{
+	char buf[BUF_LEN];
+
+	if (!vici_stringify(v, buf, sizeof(buf)) ||
+		!sec_label_mode_from_string(buf, out))
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
+/**
  * Parse TFC padding option
  */
 CALLBACK(parse_tfc, bool,
@@ -1469,7 +1517,7 @@ static bool parse_cert(auth_data_t *auth, auth_rule_t rule, chunk_t v)
 	certificate_t *cert;
 
 	cert = lib->creds->create(lib->creds, CRED_CERTIFICATE, CERT_X509,
-							  BUILD_BLOB_PEM, v, BUILD_END);
+							  BUILD_BLOB, v, BUILD_END);
 	if (cert)
 	{
 		return add_cert(auth, rule, cert);
@@ -1504,7 +1552,7 @@ CALLBACK(parse_pubkeys, bool,
 	certificate_t *cert;
 
 	cert = lib->creds->create(lib->creds, CRED_CERTIFICATE, CERT_TRUSTED_PUBKEY,
-							  BUILD_BLOB_PEM, v, BUILD_END);
+							  BUILD_BLOB, v, BUILD_END);
 	if (cert)
 	{
 		return add_cert(auth, AUTH_RULE_SUBJECT_CERT, cert);
@@ -1597,6 +1645,7 @@ CALLBACK(parse_childless, bool,
 {
 	enum_map_t map[] = {
 		{ "allow",		CHILDLESS_ALLOW		},
+		{ "prefer",		CHILDLESS_PREFER	},
 		{ "never",		CHILDLESS_NEVER		},
 		{ "force",		CHILDLESS_FORCE		},
 	};
@@ -1620,6 +1669,28 @@ CALLBACK(parse_send_cert, bool,
 		{ "ifasked",	CERT_SEND_IF_ASKED	},
 		{ "always",		CERT_ALWAYS_SEND	},
 		{ "never",		CERT_NEVER_SEND		},
+	};
+	int d;
+
+	if (parse_map(map, countof(map), &d, v))
+	{
+		*out = d;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+/**
+ * Parse an ocsp_policy_t
+ */
+CALLBACK(parse_ocsp, bool,
+	ocsp_policy_t *out, chunk_t v)
+{
+	enum_map_t map[] = {
+		{ "both",		OCSP_SEND_BOTH		},
+		{ "reply",		OCSP_SEND_REPLY		},
+		{ "request",	OCSP_SEND_REQUEST	},
+		{ "never",		OCSP_SEND_NEVER		},
 	};
 	int d;
 
@@ -1760,6 +1831,8 @@ CALLBACK(child_kv, bool,
 		{ "copy_dscp",			parse_copy_dscp,	&child->cfg.copy_dscp				},
 		{ "if_id_in",			parse_if_id,		&child->cfg.if_id_in				},
 		{ "if_id_out",			parse_if_id,		&child->cfg.if_id_out				},
+		{ "label",				parse_label,		&child->cfg.label					},
+		{ "label_mode",			parse_label_mode,	&child->cfg.label_mode				},
 	};
 
 	return parse_rules(rules, countof(rules), name, value,
@@ -1830,6 +1903,7 @@ CALLBACK(peer_kv, bool,
 		{ "childless",		parse_childless,	&peer->childless			},
 		{ "send_certreq",	parse_bool,			&peer->send_certreq			},
 		{ "send_cert",		parse_send_cert,	&peer->send_cert			},
+		{ "ocsp",			parse_ocsp,			&peer->ocsp					},
 		{ "keyingtries",	parse_uint32,		&peer->keyingtries			},
 		{ "unique",			parse_unique,		&peer->unique				},
 		{ "local_port",		parse_uint32,		&peer->local_port			},
@@ -1935,18 +2009,52 @@ CALLBACK(auth_sn, bool,
  */
 static void check_lifetimes(lifetime_cfg_t *lft)
 {
+	/* if no soft lifetime specified, set a default or base it on the hard lifetime */
+	if (lft->time.rekey == LFT_UNDEFINED)
+	{
+		if (lft->time.life != LFT_UNDEFINED)
+		{
+			lft->time.rekey = lft->time.life / 1.1;
+		}
+		else
+		{
+			lft->time.rekey = LFT_DEFAULT_CHILD_REKEY_TIME;
+		}
+	}
+	if (lft->bytes.rekey == LFT_UNDEFINED)
+	{
+		if (lft->bytes.life != LFT_UNDEFINED)
+		{
+			lft->bytes.rekey = lft->bytes.life / 1.1;
+		}
+		else
+		{
+			lft->bytes.rekey = LFT_DEFAULT_CHILD_REKEY_BYTES;
+		}
+	}
+	if (lft->packets.rekey == LFT_UNDEFINED)
+	{
+		if (lft->packets.life != LFT_UNDEFINED)
+		{
+			lft->packets.rekey = lft->packets.life / 1.1;
+		}
+		else
+		{
+			lft->packets.rekey = LFT_DEFAULT_CHILD_REKEY_PACKETS;
+		}
+	}
 	/* if no hard lifetime specified, add one at soft lifetime + 10% */
 	if (lft->time.life == LFT_UNDEFINED)
 	{
-		lft->time.life = lft->time.rekey * 110 / 100;
+		lft->time.life = lft->time.rekey * 1.1;
 	}
 	if (lft->bytes.life == LFT_UNDEFINED)
 	{
-		lft->bytes.life = lft->bytes.rekey * 110 / 100;
+		lft->bytes.life = lft->bytes.rekey * 1.1;
 	}
 	if (lft->packets.life == LFT_UNDEFINED)
 	{
-		lft->packets.life = lft->packets.rekey * 110 / 100;
+		lft->packets.life = lft->packets.rekey * 1.1;
 	}
 	/* if no rand time defined, use difference of hard and soft */
 	if (lft->time.jitter == LFT_UNDEFINED)
@@ -1980,17 +2088,17 @@ CALLBACK(children_sn, bool,
 			.mode = MODE_TUNNEL,
 			.lifetime = {
 				.time = {
-					.rekey = LFT_DEFAULT_CHILD_REKEY_TIME,
+					.rekey = LFT_UNDEFINED,
 					.life = LFT_UNDEFINED,
 					.jitter = LFT_UNDEFINED,
 				},
 				.bytes = {
-					.rekey = LFT_DEFAULT_CHILD_REKEY_BYTES,
+					.rekey = LFT_UNDEFINED,
 					.life = LFT_UNDEFINED,
 					.jitter = LFT_UNDEFINED,
 				},
 				.packets = {
-					.rekey = LFT_DEFAULT_CHILD_REKEY_PACKETS,
+					.rekey = LFT_UNDEFINED,
 					.life = LFT_UNDEFINED,
 					.jitter = LFT_UNDEFINED,
 				},
@@ -2110,7 +2218,7 @@ CALLBACK(peer_sn, bool,
 					default_id = TRUE;
 				}
 				else if (cert->get_type(cert) == CERT_TRUSTED_PUBKEY &&
-						 id->get_type != ID_ANY)
+						 id->get_type(id) != ID_ANY)
 				{
 					/* set the subject of all raw public keys to the id */
 					pubkey_cert = (pubkey_cert_t*)cert;
@@ -2143,30 +2251,33 @@ CALLBACK(peer_sn, bool,
 static void run_start_action(private_vici_config_t *this, peer_cfg_t *peer_cfg,
 							 child_cfg_t *child_cfg)
 {
-	switch (child_cfg->get_start_action(child_cfg))
+	action_t action;
+
+	action = child_cfg->get_start_action(child_cfg);
+
+	if (action & ACTION_TRAP)
 	{
-		case ACTION_RESTART:
-			DBG1(DBG_CFG, "initiating '%s'", child_cfg->get_name(child_cfg));
-			charon->controller->initiate(charon->controller,
+		DBG1(DBG_CFG, "installing '%s'", child_cfg->get_name(child_cfg));
+		switch (child_cfg->get_mode(child_cfg))
+		{
+			case MODE_PASS:
+			case MODE_DROP:
+				charon->shunts->install(charon->shunts,
+										peer_cfg->get_name(peer_cfg), child_cfg);
+				/* no need to check for ACTION_START */
+				return;
+			default:
+				charon->traps->install(charon->traps, peer_cfg, child_cfg);
+				break;
+		}
+	}
+
+	if (action & ACTION_START)
+	{
+		DBG1(DBG_CFG, "initiating '%s'", child_cfg->get_name(child_cfg));
+		charon->controller->initiate(charon->controller,
 					peer_cfg->get_ref(peer_cfg), child_cfg->get_ref(child_cfg),
-					NULL, NULL, 0, FALSE);
-			break;
-		case ACTION_ROUTE:
-			DBG1(DBG_CFG, "installing '%s'", child_cfg->get_name(child_cfg));
-			switch (child_cfg->get_mode(child_cfg))
-			{
-				case MODE_PASS:
-				case MODE_DROP:
-					charon->shunts->install(charon->shunts,
-									peer_cfg->get_name(peer_cfg), child_cfg);
-					break;
-				default:
-					charon->traps->install(charon->traps, peer_cfg, child_cfg);
-					break;
-			}
-			break;
-		default:
-			break;
+					NULL, NULL, 0, 0, FALSE);
 	}
 }
 
@@ -2181,100 +2292,101 @@ static void clear_start_action(private_vici_config_t *this, char *peer_name,
 	ike_sa_t *ike_sa;
 	uint32_t id = 0, others;
 	array_t *ids = NULL, *ikeids = NULL;
+	action_t action;
 	char *name;
 
 	name = child_cfg->get_name(child_cfg);
+	action = child_cfg->get_start_action(child_cfg);
 
-	switch (child_cfg->get_start_action(child_cfg))
+	if (action & ACTION_TRAP)
 	{
-		case ACTION_RESTART:
-			enumerator = charon->controller->create_ike_sa_enumerator(
+		DBG1(DBG_CFG, "uninstalling '%s'", name);
+		switch (child_cfg->get_mode(child_cfg))
+		{
+			case MODE_PASS:
+			case MODE_DROP:
+				charon->shunts->uninstall(charon->shunts, peer_name, name);
+				/* no need to check for ACTION_START */
+				return;
+			default:
+				charon->traps->uninstall(charon->traps, peer_name, name);
+				break;
+		}
+	}
+
+	if (action & ACTION_START)
+	{
+		enumerator = charon->controller->create_ike_sa_enumerator(
 													charon->controller, TRUE);
-			while (enumerator->enumerate(enumerator, &ike_sa))
+		while (enumerator->enumerate(enumerator, &ike_sa))
+		{
+			if (!streq(ike_sa->get_name(ike_sa), peer_name))
 			{
-				if (!streq(ike_sa->get_name(ike_sa), peer_name))
+				continue;
+			}
+			others = id = 0;
+			children = ike_sa->create_child_sa_enumerator(ike_sa);
+			while (children->enumerate(children, &child_sa))
+			{
+				if (child_sa->get_state(child_sa) != CHILD_DELETING &&
+					child_sa->get_state(child_sa) != CHILD_DELETED)
 				{
-					continue;
+					if (streq(name, child_sa->get_name(child_sa)))
+					{
+						id = child_sa->get_unique_id(child_sa);
+					}
+					else
+					{
+						others++;
+					}
 				}
-				others = id = 0;
+			}
+			children->destroy(children);
+
+			if (!ike_sa->get_child_count(ike_sa) || (id && !others))
+			{
+				/* found no children or only matching, delete IKE_SA */
+				id = ike_sa->get_unique_id(ike_sa);
+				array_insert_create_value(&ikeids, sizeof(id),
+										  ARRAY_TAIL, &id);
+			}
+			else
+			{
 				children = ike_sa->create_child_sa_enumerator(ike_sa);
 				while (children->enumerate(children, &child_sa))
 				{
-					if (child_sa->get_state(child_sa) != CHILD_DELETING &&
-						child_sa->get_state(child_sa) != CHILD_DELETED)
+					if (streq(name, child_sa->get_name(child_sa)))
 					{
-						if (streq(name, child_sa->get_name(child_sa)))
-						{
-							id = child_sa->get_unique_id(child_sa);
-						}
-						else
-						{
-							others++;
-						}
+						id = child_sa->get_unique_id(child_sa);
+						array_insert_create_value(&ids, sizeof(id),
+												  ARRAY_TAIL, &id);
 					}
 				}
 				children->destroy(children);
+			}
+		}
+		enumerator->destroy(enumerator);
 
-				if (!ike_sa->get_child_count(ike_sa) || (id && !others))
-				{
-					/* found no children or only matching, delete IKE_SA */
-					id = ike_sa->get_unique_id(ike_sa);
-					array_insert_create_value(&ikeids, sizeof(id),
-											  ARRAY_TAIL, &id);
-				}
-				else
-				{
-					children = ike_sa->create_child_sa_enumerator(ike_sa);
-					while (children->enumerate(children, &child_sa))
-					{
-						if (streq(name, child_sa->get_name(child_sa)))
-						{
-							id = child_sa->get_unique_id(child_sa);
-							array_insert_create_value(&ids, sizeof(id),
-													  ARRAY_TAIL, &id);
-						}
-					}
-					children->destroy(children);
-				}
-			}
-			enumerator->destroy(enumerator);
-
-			if (array_count(ids))
+		if (array_count(ids))
+		{
+			while (array_remove(ids, ARRAY_HEAD, &id))
 			{
-				while (array_remove(ids, ARRAY_HEAD, &id))
-				{
-					DBG1(DBG_CFG, "closing '%s' #%u", name, id);
-					charon->controller->terminate_child(charon->controller,
-														id, NULL, NULL, 0);
-				}
-				array_destroy(ids);
+				DBG1(DBG_CFG, "closing '%s' #%u", name, id);
+				charon->controller->terminate_child(charon->controller,
+													id, NULL, NULL, 0, 0);
 			}
-			if (array_count(ikeids))
+			array_destroy(ids);
+		}
+		if (array_count(ikeids))
+		{
+			while (array_remove(ikeids, ARRAY_HEAD, &id))
 			{
-				while (array_remove(ikeids, ARRAY_HEAD, &id))
-				{
-					DBG1(DBG_CFG, "closing IKE_SA #%u", id);
-					charon->controller->terminate_ike(charon->controller, id,
-													  FALSE, NULL, NULL, 0);
-				}
-				array_destroy(ikeids);
+				DBG1(DBG_CFG, "closing IKE_SA #%u", id);
+				charon->controller->terminate_ike(charon->controller, id,
+												  FALSE, NULL, NULL, 0, 0);
 			}
-			break;
-		case ACTION_ROUTE:
-			DBG1(DBG_CFG, "uninstalling '%s'", name);
-			switch (child_cfg->get_mode(child_cfg))
-			{
-				case MODE_PASS:
-				case MODE_DROP:
-					charon->shunts->uninstall(charon->shunts, peer_name, name);
-					break;
-				default:
-					charon->traps->uninstall(charon->traps, peer_name, name);
-					break;
-			}
-			break;
-		default:
-			break;
+			array_destroy(ikeids);
+		}
 	}
 }
 
@@ -2411,6 +2523,7 @@ CALLBACK(config_sn, bool,
 		.send_certreq = TRUE,
 		.pull = TRUE,
 		.send_cert = CERT_SEND_IF_ASKED,
+		.ocsp = OCSP_SEND_REPLY,
 		.version = IKE_ANY,
 		.remote_port = IKEV2_UDP_PORT,
 		.fragmentation = FRAGMENTATION_YES,
@@ -2517,8 +2630,8 @@ CALLBACK(config_sn, bool,
 #ifdef ME
 	if (peer.mediation && peer.mediated_by)
 	{
-		DBG1(DBG_CFG, "a mediation connection cannot be a mediated connection "
-			 "at the same time, config discarded");
+		request->reply = create_reply("a mediation connection cannot be a "
+									  "mediated connection at the same time");
 		free_peer_data(&peer);
 		return FALSE;
 	}
@@ -2529,23 +2642,23 @@ CALLBACK(config_sn, bool,
 	else if (peer.mediated_by)
 	{	/* fallback to remote identity of first auth round if peer_id is not
 		 * given explicitly */
-		auth_cfg_t *cfg;
+		auth_data_t *auth;
 
 		if (!peer.peer_id &&
-			peer.remote->get_first(peer.remote, (void**)&cfg) == SUCCESS)
+			peer.remote->get_first(peer.remote, (void**)&auth) == SUCCESS)
 		{
-			peer.peer_id = cfg->get(cfg, AUTH_RULE_IDENTITY);
+			peer.peer_id = auth->cfg->get(auth->cfg, AUTH_RULE_IDENTITY);
 			if (peer.peer_id)
 			{
 				peer.peer_id = peer.peer_id->clone(peer.peer_id);
 			}
-			else
-			{
-				DBG1(DBG_CFG, "mediation peer missing for mediated connection, "
-					 "config discarded");
-				free_peer_data(&peer);
-				return FALSE;
-			}
+		}
+		if (!peer.peer_id)
+		{
+			request->reply = create_reply("mediation peer or remote identity "
+										  "missing for mediated connection");
+			free_peer_data(&peer);
+			return FALSE;
 		}
 	}
 #endif /* ME */
@@ -2559,6 +2672,8 @@ CALLBACK(config_sn, bool,
 		.remote = peer.remote_addrs,
 		.remote_port = peer.remote_port,
 		.no_certreq = !peer.send_certreq,
+		.ocsp_certreq = peer.ocsp == OCSP_SEND_BOTH ||
+						peer.ocsp == OCSP_SEND_REQUEST,
 		.force_encap = peer.encap,
 		.fragmentation = peer.fragmentation,
 		.childless = peer.childless,
@@ -2568,6 +2683,7 @@ CALLBACK(config_sn, bool,
 
 	cfg = (peer_cfg_create_t){
 		.cert_policy = peer.send_cert,
+		.ocsp_policy = peer.ocsp,
 		.unique = peer.unique,
 		.keyingtries = peer.keyingtries,
 		.rekey_time = peer.rekey_time,

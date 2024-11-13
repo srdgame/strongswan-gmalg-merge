@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2013 Martin Willi
- * Copyright (C) 2013 revosec AG
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -820,6 +821,8 @@ static bool install_sps(private_kernel_wfp_ipsec_t *this,
 			case TS_IPV6_ADDR_RANGE:
 				has_v6 = TRUE;
 				break;
+			default:
+				continue;
 		}
 
 		/* inbound policy */
@@ -1634,6 +1637,7 @@ static u_int hash_trap(trap_t *trap)
 static void acquire(private_kernel_wfp_ipsec_t *this, UINT64 filter_id,
 					traffic_selector_t *src, traffic_selector_t *dst)
 {
+	kernel_acquire_data_t data = {};
 	uint32_t reqid = 0;
 	trap_t *trap, key = {
 		.filter_id = filter_id,
@@ -1649,9 +1653,13 @@ static void acquire(private_kernel_wfp_ipsec_t *this, UINT64 filter_id,
 
 	if (reqid)
 	{
-		src = src ? src->clone(src) : NULL;
-		dst = dst ? dst->clone(dst) : NULL;
-		charon->kernel->acquire(charon->kernel, reqid, src, dst);
+		data.src = src ? src->clone(src) : NULL;
+		data.dst = dst ? dst->clone(dst) : NULL;
+
+		charon->kernel->acquire(charon->kernel, reqid, &data);
+
+		DESTROY_IF(data.src);
+		DESTROY_IF(data.dst);
 	}
 }
 
@@ -2219,8 +2227,8 @@ METHOD(kernel_ipsec_t, update_sa, status_t,
 	{
 		/* inbound entry, do update */
 		sa_id = entry->sa_id;
-		ports.localUdpEncapPort = entry->local->get_port(entry->local);
-		ports.remoteUdpEncapPort = entry->remote->get_port(entry->remote);
+		ports.localUdpEncapPort = data->new_dst->get_port(data->new_dst);
+		ports.remoteUdpEncapPort = data->new_src->get_port(data->new_src);
 	}
 	this->mutex->unlock(this->mutex);
 
@@ -2273,6 +2281,10 @@ METHOD(kernel_ipsec_t, update_sa, status_t,
 		key.dst = entry->osa.dst;
 		this->osas->remove(this->osas, &key);
 
+		if (data->new_reqid)
+		{
+			entry->reqid = data->new_reqid;
+		}
 		entry->local->destroy(entry->local);
 		entry->remote->destroy(entry->remote);
 		entry->local = data->new_dst->clone(data->new_dst);
@@ -2480,7 +2492,8 @@ METHOD(kernel_ipsec_t, flush_policies, status_t,
  * Add a bypass policy for a specific UDP port
  */
 static bool add_bypass(private_kernel_wfp_ipsec_t *this,
-					   int family, uint16_t port, bool inbound, UINT64 *luid)
+					   int family, uint16_t port, bool inbound, bool tunnel,
+					   UINT64 *luid)
 {
 	FWPM_FILTER_CONDITION0 *cond, *conds = NULL;
 	int count = 0;
@@ -2511,6 +2524,11 @@ static bool add_bypass(private_kernel_wfp_ipsec_t *this,
 			break;
 		default:
 			return FALSE;
+	}
+
+	if (tunnel)
+	{
+		filter.subLayerKey = FWPM_SUBLAYER_IPSEC_TUNNEL;
 	}
 
 	cond = append_condition(&conds, &count);
@@ -2546,8 +2564,8 @@ METHOD(kernel_ipsec_t, bypass_socket, bool,
 		SOCKADDR_IN in;
 		SOCKADDR_IN6 in6;
 	} saddr;
-	int addrlen = sizeof(saddr);
-	UINT64 filter_out, filter_in = 0;
+	int addrlen = sizeof(saddr), i;
+	UINT64 filters[4] = { 0 };
 	uint16_t port;
 
 	if (getsockname(fd, &saddr.sa, &addrlen) == SOCKET_ERROR)
@@ -2566,19 +2584,26 @@ METHOD(kernel_ipsec_t, bypass_socket, bool,
 			return FALSE;
 	}
 
-	if (!add_bypass(this, family, port, TRUE, &filter_in) ||
-		!add_bypass(this, family, port, FALSE, &filter_out))
+	if (!add_bypass(this, family, port, TRUE, FALSE,  &filters[0]) ||
+		!add_bypass(this, family, port, TRUE, TRUE,   &filters[1]) ||
+		!add_bypass(this, family, port, FALSE, FALSE, &filters[2]) ||
+		!add_bypass(this, family, port, FALSE, TRUE,  &filters[3]))
 	{
-		if (filter_in)
+		for (i = 0; i < countof(filters); i++)
 		{
-			FwpmFilterDeleteById0(this->handle, filter_in);
+			if (filters[i])
+			{
+				FwpmFilterDeleteById0(this->handle, filters[i]);
+			}
 		}
 		return FALSE;
 	}
 
 	this->mutex->lock(this->mutex);
-	array_insert(this->bypass, ARRAY_TAIL, &filter_in);
-	array_insert(this->bypass, ARRAY_TAIL, &filter_out);
+	for (i = 0; i < countof(filters); i++)
+	{
+		array_insert(this->bypass, ARRAY_TAIL, &filters[i]);
+	}
 	this->mutex->unlock(this->mutex);
 
 	return TRUE;

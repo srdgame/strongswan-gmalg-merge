@@ -1,7 +1,8 @@
 /*
  * Copyright (C) 2009 Martin Willi
  * Copyright (C) 2008 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -22,11 +23,23 @@
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* for EVP_PKEY_CTX_set_dh_pad */
+#include <openssl/dh.h>
+#endif
+
 /* these were added with 1.1.0 when ASN1_OBJECT was made opaque */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 #define OBJ_get0_data(o) ((o)->data)
 #define OBJ_length(o) ((o)->length)
 #define ASN1_STRING_get0_data(a) ASN1_STRING_data((ASN1_STRING*)a)
+#endif
+
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+/**
+ * Chunk for an ASN.1 Integer with a value of 0.
+ */
+static const chunk_t asn1_zero_int = chunk_from_chars(0x00);
 #endif
 
 /*
@@ -48,6 +61,14 @@ bool openssl_compute_shared_key(EVP_PKEY *priv, EVP_PKEY *pub, chunk_t *shared)
 		goto error;
 	}
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	if (EVP_PKEY_base_id(priv) == EVP_PKEY_DH &&
+		EVP_PKEY_CTX_set_dh_pad(ctx, 1) <= 0)
+	{
+		goto error;
+	}
+#endif
+
 	if (EVP_PKEY_derive_set_peer(ctx, pub) <= 0)
 	{
 		goto error;
@@ -62,6 +83,7 @@ bool openssl_compute_shared_key(EVP_PKEY *priv, EVP_PKEY *pub, chunk_t *shared)
 
 	if (EVP_PKEY_derive(ctx, shared->ptr, &shared->len) <= 0)
 	{
+		chunk_clear(shared);
 		goto error;
 	}
 
@@ -72,49 +94,46 @@ error:
 	return success;
 }
 
-/**
- * Described in header.
+/*
+ * Described in header
  */
-bool openssl_hash_chunk(int hash_type, chunk_t data, chunk_t *hash)
+bool openssl_fingerprint(EVP_PKEY *key, cred_encoding_type_t type, chunk_t *fp)
 {
-	EVP_MD_CTX *ctx;
-	bool ret = FALSE;
-	const EVP_MD *hasher = EVP_get_digestbynid(hash_type);
-	if (!hasher)
+	hasher_t *hasher;
+	chunk_t enc;
+	u_char *p;
+
+	if (lib->encoding->get_cache(lib->encoding, type, key, fp))
 	{
+		return TRUE;
+	}
+	switch (type)
+	{
+		case KEYID_PUBKEY_SHA1:
+			enc = chunk_alloc(i2d_PublicKey(key, NULL));
+			p = enc.ptr;
+			i2d_PublicKey(key, &p);
+			break;
+		case KEYID_PUBKEY_INFO_SHA1:
+			enc = chunk_alloc(i2d_PUBKEY(key, NULL));
+			p = enc.ptr;
+			i2d_PUBKEY(key, &p);
+			break;
+		default:
+			return FALSE;
+	}
+	hasher = lib->crypto->create_hasher(lib->crypto, HASH_SHA1);
+	if (!hasher || !hasher->allocate_hash(hasher, enc, fp))
+	{
+		DBG1(DBG_LIB, "SHA1 not supported, fingerprinting failed");
+		DESTROY_IF(hasher);
+		free(enc.ptr);
 		return FALSE;
 	}
-
-	ctx = EVP_MD_CTX_create();
-	if (!ctx)
-	{
-		goto error;
-	}
-
-	if (!EVP_DigestInit_ex(ctx, hasher, NULL))
-	{
-		goto error;
-	}
-
-	if (!EVP_DigestUpdate(ctx, data.ptr, data.len))
-	{
-		goto error;
-	}
-
-	*hash = chunk_alloc(EVP_MD_size(hasher));
-	if (!EVP_DigestFinal_ex(ctx, hash->ptr, NULL))
-	{
-		chunk_free(hash);
-		goto error;
-	}
-
-	ret = TRUE;
-error:
-	if (ctx)
-	{
-		EVP_MD_CTX_destroy(ctx);
-	}
-	return ret;
+	free(enc.ptr);
+	hasher->destroy(hasher);
+	lib->encoding->cache(lib->encoding, type, key, fp);
+	return TRUE;
 }
 
 /**
@@ -222,6 +241,22 @@ chunk_t openssl_asn1_str2chunk(const ASN1_STRING *asn1)
 							ASN1_STRING_length(asn1));
 	}
 	return chunk_empty;
+}
+
+/**
+ * Described in header.
+ */
+chunk_t openssl_asn1_int2chunk(const ASN1_INTEGER *asn1)
+{
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+	/* BoringSSL and AWS-LC use an empty chunk for 0 so return a properly
+	 * encoded chunk here. */
+	if (asn1 && ASN1_STRING_length(asn1) == 0)
+	{
+		return asn1_zero_int;
+	}
+#endif
+	return openssl_asn1_str2chunk(asn1);
 }
 
 /**

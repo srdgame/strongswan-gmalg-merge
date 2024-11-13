@@ -1,9 +1,10 @@
 /*
- * Copyright (C) 2006-2016 Tobias Brunner
+ * Copyright (C) 2006-2023 Tobias Brunner
  * Copyright (C) 2006 Daniel Roethlisberger
  * Copyright (C) 2005-2006 Martin Willi
  * Copyright (C) 2005 Jan Hutter
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -50,7 +51,6 @@ typedef struct kernel_interface_t kernel_interface_t;
 typedef enum kernel_feature_t kernel_feature_t;
 
 #include <networking/host.h>
-#include <crypto/prf_plus.h>
 
 #include <kernel/kernel_listener.h>
 #include <kernel/kernel_ipsec.h>
@@ -79,6 +79,8 @@ enum kernel_feature_t {
 	KERNEL_NO_POLICY_UPDATES = (1<<3),
 	/** IPsec backend supports installing SPIs on policies */
 	KERNEL_POLICY_SPI = (1<<4),
+	/** IPsec backend reports use time per SA via query_sa() */
+	KERNEL_SA_USE_TIME = (1<<5),
 };
 
 /**
@@ -145,27 +147,36 @@ struct kernel_interface_t {
 	 * @param mark_out	outbound mark on SA
 	 * @param if_id_in	inbound interface ID on SA
 	 * @param if_id_out	outbound interface ID on SA
+	 * @param label		security label (usually the one on the policy, not SA)
 	 * @param reqid		allocated reqid
-	 * @return			SUCCESS if reqid allocated
+	 * @return			SUCCESS if reqid allocated, OUT_OF_RES if no reqid is
+	 *					available due to an overflow
 	 */
 	status_t (*alloc_reqid)(kernel_interface_t *this,
 							linked_list_t *local_ts, linked_list_t *remote_ts,
 							mark_t mark_in, mark_t mark_out, uint32_t if_id_in,
-							uint32_t if_id_out, uint32_t *reqid);
+							uint32_t if_id_out, sec_label_t *label,
+							uint32_t *reqid);
+
+	/**
+	 * Increase the reference count for the given reqid that was previously
+	 * allocated by alloc_reqid().
+	 *
+	 * The reference must be released with a call to release_reqid().
+	 *
+	 * @param reqid		previously allocated reqid
+	 * @return			SUCCESS if refcount increased, NOT_FOUND if reqid is
+	 *					unknown (shouldn't happen)
+	 */
+	status_t (*ref_reqid)(kernel_interface_t *this, uint32_t reqid);
 
 	/**
 	 * Release a previously allocated reqid.
 	 *
 	 * @param reqid		reqid to release
-	 * @param mark_in	inbound mark on SA
-	 * @param mark_out	outbound mark on SA
-	 * @param if_id_in	inbound interface ID on SA
-	 * @param if_id_out	outbound interface ID on SA
 	 * @return			SUCCESS if reqid released
 	 */
-	status_t (*release_reqid)(kernel_interface_t *this, uint32_t reqid,
-							  mark_t mark_in, mark_t mark_out,
-							  uint32_t if_id_in, uint32_t if_id_out);
+	status_t (*release_reqid)(kernel_interface_t *this, uint32_t reqid);
 
 	/**
 	 * Add an SA to the SAD.
@@ -197,7 +208,11 @@ struct kernel_interface_t {
 						  kernel_ipsec_update_sa_t *data);
 
 	/**
-	 * Query the number of bytes processed by an SA from the SAD.
+	 * Query the number of bytes and packets processed by an SA from the SAD.
+	 *
+	 * Some implementations may also return the last use time (as indicated by
+	 * get_features()). This is a monotonic timestamp as returned by
+	 * time_monotonic().
 	 *
 	 * @param id			data identifying this SA
 	 * @param data			data to query the SA
@@ -242,11 +257,12 @@ struct kernel_interface_t {
 	 * Query the use time of a policy.
 	 *
 	 * The use time of a policy is the time the policy was used
-	 * for the last time.
+	 * for the last time. This is a monotonic timestamp as returned by
+	 * time_monotonic().
 	 *
 	 * @param id			data identifying this policy
 	 * @param data			data to query the policy
-	 * @param[out] use_time	the monotonic timestamp of this SA's last use
+	 * @param[out] use_time	the monotonic timestamp of this policy's last use
 	 * @return				SUCCESS if operation completed
 	 */
 	status_t (*query_policy)(kernel_interface_t *this,
@@ -513,11 +529,10 @@ struct kernel_interface_t {
 	 * Raise an acquire event.
 	 *
 	 * @param reqid			reqid of the policy to acquire
-	 * @param src_ts		source traffic selector
-	 * @param dst_ts		destination traffic selector
+	 * @param data			data from the acquire
 	 */
 	void (*acquire)(kernel_interface_t *this, uint32_t reqid,
-					traffic_selector_t *src_ts, traffic_selector_t *dst_ts);
+					kernel_acquire_data_t *data);
 
 	/**
 	 * Raise an expire event.

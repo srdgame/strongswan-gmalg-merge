@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2018 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -18,6 +19,7 @@
 #if OPENSSL_VERSION_NUMBER >= 0x1010100fL && !defined(OPENSSL_NO_EC)
 
 #include "openssl_ed_private_key.h"
+#include "openssl_util.h"
 
 #include <utils/debug.h>
 
@@ -108,7 +110,7 @@ error:
 
 METHOD(private_key_t, decrypt, bool,
 	private_private_key_t *this, encryption_scheme_t scheme,
-	chunk_t crypto, chunk_t *plain)
+	void *params, chunk_t crypto, chunk_t *plain)
 {
 	DBG1(DBG_LIB, "EdDSA private key decryption not implemented");
 	return FALSE;
@@ -156,8 +158,6 @@ METHOD(private_key_t, get_fingerprint, bool,
 METHOD(private_key_t, get_encoding, bool,
 	private_private_key_t *this, cred_encoding_type_t type, chunk_t *encoding)
 {
-	u_char *p;
-
 	if (this->engine)
 	{
 		return FALSE;
@@ -170,9 +170,7 @@ METHOD(private_key_t, get_encoding, bool,
 		{
 			bool success = TRUE;
 
-			*encoding = chunk_alloc(i2d_PrivateKey(this->key, NULL));
-			p = encoding->ptr;
-			i2d_PrivateKey(this->key, &p);
+			*encoding = openssl_i2chunk(PrivateKey, this->key);
 
 			if (type == PRIVKEY_PEM)
 			{
@@ -248,10 +246,10 @@ private_key_t *openssl_ed_private_key_create(EVP_PKEY *key, bool engine)
 
 	switch (EVP_PKEY_base_id(key))
 	{
-		case EVP_PKEY_X25519:
+		case EVP_PKEY_ED25519:
 			type = KEY_ED25519;
 			break;
-		case EVP_PKEY_X448:
+		case EVP_PKEY_ED448:
 			type = KEY_ED448;
 			break;
 		default:

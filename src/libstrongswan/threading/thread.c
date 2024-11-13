@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2009-2012 Tobias Brunner
- * HSR Hochschule fuer Technik Rapperswil
+ *
+ * Copyright (C) secunet Security Networks AG
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -84,7 +85,7 @@ struct private_thread_t {
 	bool detached_or_joined;
 
 	/**
-	 * TRUE if the threads has terminated (cancelled, via thread_exit or
+	 * TRUE if the threads has terminated (canceled, via thread_exit or
 	 * returned from the main function)
 	 */
 	bool terminated;
@@ -130,7 +131,7 @@ static thread_value_t *current_thread;
 #endif
 
 /* the signal handler for SIG_CANCEL uses pthread_exit to terminate the
- * "cancelled" thread */
+ * "canceled" thread */
 static void cancel_signal_handler(int sig)
 {
 	pthread_exit(NULL);
@@ -305,7 +306,11 @@ static void thread_cleanup(private_thread_t *this)
 
 /**
  * Main function wrapper for threads.
+ *
+ * Excluded from AddressSanitizer because some newer versions have an issue that
+ * causes an "AddressSanitizer CHECK failed" error for canceled threads.
  */
+ADDRESS_SANITIZER_EXCLUDE
 static void *thread_main(private_thread_t *this)
 {
 	void *res;
