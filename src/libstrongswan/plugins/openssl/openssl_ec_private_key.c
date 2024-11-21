@@ -55,16 +55,15 @@ struct private_openssl_ec_private_key_t {
 	bool engine;
 
 	/**
+	 * reference count
+	 */
+	refcount_t ref;
+
+	/**
 	 *  key type
 	 *  Added by zhangke
 	 */
 	key_type_t type;
-
-
-	/**
-	 * reference count
-	 */
-	refcount_t ref;
 };
 
 /* from openssl_ec_public_key */
@@ -180,7 +179,7 @@ METHOD(private_key_t, sign, bool,
 			return build_der_signature(this, NID_sha512, data, signature);
 		case SIGN_SM2_WITH_SM3:
 			return build_curve_signature(this, scheme, NID_sm3,
-										 NID_sm2p256v1, data, signature);
+										 NID_sm2, data, signature);
 		case SIGN_ECDSA_256:
 			return build_curve_signature(this, scheme, NID_sha256,
 										 NID_X9_62_prime256v1, data, signature);

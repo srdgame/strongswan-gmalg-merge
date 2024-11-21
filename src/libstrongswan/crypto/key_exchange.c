@@ -33,7 +33,7 @@ ENUM_NEXT(key_exchange_method_names, MODP_2048_BIT, ECP_521_BIT, MODP_1536_BIT,
 	"ECP_256",
 	"ECP_384",
 	"ECP_521");
-ENUM_NEXT(key_exchange_method_names, MODP_1024_160, CURVE_448, ECP_521_BIT,
+ENUM_NEXT(key_exchange_method_names, MODP_1024_160, CURVE_SM2, ECP_521_BIT,
 	"MODP_1024_160",
 	"MODP_2048_224",
 	"MODP_2048_256",
@@ -44,9 +44,9 @@ ENUM_NEXT(key_exchange_method_names, MODP_1024_160, CURVE_448, ECP_521_BIT,
 	"ECP_384_BP",
 	"ECP_512_BP",
 	"CURVE_25519",
-	"CURVE_SM2",
-	"CURVE_448");
-ENUM_NEXT(key_exchange_method_names, MODP_NULL, MODP_NULL, CURVE_448,
+	"CURVE_448",
+	"CURVE_SM2");
+ENUM_NEXT(key_exchange_method_names, MODP_NULL, MODP_NULL, CURVE_SM2,
 	"MODP_NULL");
 ENUM_NEXT(key_exchange_method_names, NTRU_112_BIT, NTRU_256_BIT, MODP_NULL,
 	"NTRU_112",
@@ -74,7 +74,7 @@ ENUM_NEXT(key_exchange_method_names_short, MODP_2048_BIT, ECP_521_BIT, MODP_1536
 	"ecp256",
 	"ecp384",
 	"ecp521");
-ENUM_NEXT(key_exchange_method_names_short, MODP_1024_160, CURVE_448, ECP_521_BIT,
+ENUM_NEXT(key_exchange_method_names_short, MODP_1024_160, CURVE_SM2, ECP_521_BIT,
 	"modp1024s160",
 	"modp2048s224",
 	"modp2048s256",
@@ -85,9 +85,9 @@ ENUM_NEXT(key_exchange_method_names_short, MODP_1024_160, CURVE_448, ECP_521_BIT
 	"ecp384bp",
 	"ecp512bp",
 	"curve25519",
-	"sm2",
-	"curve448");
-ENUM_NEXT(key_exchange_method_names_short, MODP_NULL, MODP_NULL, CURVE_448,
+	"curve448",
+	"sm2");
+ENUM_NEXT(key_exchange_method_names_short, MODP_NULL, MODP_NULL, CURVE_SM2,
 	"modpnull");
 ENUM_NEXT(key_exchange_method_names_short, NTRU_112_BIT, NTRU_256_BIT, MODP_NULL,
 	"ntru112",
@@ -595,11 +595,11 @@ bool key_exchange_verify_pubkey(key_exchange_method_t ke, chunk_t value)
 		case CURVE_25519:
 			valid = value.len == 32;
 			break;
-		case CURVE_SM2:
-			valid = value.len == 64;
-			break;
 		case CURVE_448:
 			valid = value.len == 56;
+			break;
+		case CURVE_SM2:
+			valid = value.len == 64;
 			break;
 		case NTRU_112_BIT:
 		case NTRU_128_BIT:

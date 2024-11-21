@@ -41,18 +41,18 @@ ENUM_NEXT(encryption_algorithm_names, ENCR_AES_GCM_ICV8, ENCR_NULL_AUTH_AES_GMAC
 	"AES_GCM_12",
 	"AES_GCM_16",
 	"NULL_AES_GMAC");
-ENUM_NEXT(encryption_algorithm_names, ENCR_CAMELLIA_CBC, ENCR_CHACHA20_POLY1305, ENCR_NULL_AUTH_AES_GMAC,
+ENUM_NEXT(encryption_algorithm_names, ENCR_CAMELLIA_CBC, ENCR_SM4_CBC, ENCR_NULL_AUTH_AES_GMAC,
 	"CAMELLIA_CBC",
 	"CAMELLIA_CTR",
 	"CAMELLIA_CCM_8",
 	"CAMELLIA_CCM_12",
 	"CAMELLIA_CCM_16",
+	"CHACHA20_POLY1305",
 	"SM1_ECB",
 	"SM1_CBC",
 	"SM4_ECB",
-	"SM4_CBC",
-	"CHACHA20_POLY1305");
-ENUM_NEXT(encryption_algorithm_names, ENCR_UNDEFINED, ENCR_AES_CFB, ENCR_CHACHA20_POLY1305,
+	"SM4_CBC");
+ENUM_NEXT(encryption_algorithm_names, ENCR_UNDEFINED, ENCR_AES_CFB, ENCR_SM4_CBC,
 	"UNDEFINED",
 	"DES_ECB",
 	"SERPENT_CBC",
@@ -72,22 +72,6 @@ encryption_algorithm_t encryption_algorithm_from_oid(int oid, size_t *key_size)
 
 	switch (oid)
 	{
-		case OID_SM1_ECB:
-			alg = ENCR_SM1_ECB;
-			alg_key_size = 16 ;
-			break;
-		case OID_SM1_CBC:
-			alg = ENCR_SM1_CBC;
-			alg_key_size = 16 ;
-			break;
-		case OID_SM4_ECB:
-			alg = ENCR_SM4_ECB;
-			alg_key_size = 16 ;
-			break;
-		case OID_SM4_CBC:
-			alg = ENCR_SM4_CBC;
-			alg_key_size = 16 ;
-			break;
 		case OID_DES_CBC:
 			alg = ENCR_DES;
 			alg_key_size = 0;
@@ -124,6 +108,22 @@ encryption_algorithm_t encryption_algorithm_from_oid(int oid, size_t *key_size)
 			alg = ENCR_BLOWFISH;
 			alg_key_size = 0;
 			break;
+		case OID_SM1_ECB:
+			alg = ENCR_SM1_ECB;
+			alg_key_size = 16 ;
+			break;
+		case OID_SM1_CBC:
+			alg = ENCR_SM1_CBC;
+			alg_key_size = 16 ;
+			break;
+		case OID_SM4_ECB:
+			alg = ENCR_SM4_ECB;
+			alg_key_size = 16 ;
+			break;
+		case OID_SM4_CBC:
+			alg = ENCR_SM4_CBC;
+			alg_key_size = 16 ;
+			break;
 		default:
 			alg = ENCR_UNDEFINED;
 			alg_key_size = 0;
@@ -144,18 +144,6 @@ int encryption_algorithm_to_oid(encryption_algorithm_t alg, size_t key_size)
 
 	switch(alg)
 	{
-		case ENCR_SM1_ECB:
-			oid = OID_SM1_ECB;
-			break;
-		case ENCR_SM1_CBC:
-			oid = OID_SM1_CBC;
-			break;
-		case ENCR_SM4_ECB:
-			oid = OID_SM4_ECB;
-			break;
-		case ENCR_SM4_CBC:
-			oid = OID_SM4_CBC;
-			break;
 		case ENCR_DES:
 			oid = OID_DES_CBC;
 			break;
@@ -196,6 +184,18 @@ int encryption_algorithm_to_oid(encryption_algorithm_t alg, size_t key_size)
 			break;
 		case ENCR_BLOWFISH:
 			oid = OID_BLOWFISH_CBC;
+			break;
+		case ENCR_SM1_ECB:
+			oid = OID_SM1_ECB;
+			break;
+		case ENCR_SM1_CBC:
+			oid = OID_SM1_CBC;
+			break;
+		case ENCR_SM4_ECB:
+			oid = OID_SM4_ECB;
+			break;
+		case ENCR_SM4_CBC:
+			oid = OID_SM4_CBC;
 			break;
 		default:
 			oid = OID_UNKNOWN;

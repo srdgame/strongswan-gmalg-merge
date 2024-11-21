@@ -378,10 +378,7 @@ AC_SUBST(PLUGIN_CFLAGS)
 AC_PROG_CC
 AM_PROG_CC_C_O
 
-#===================
-#This option was disabled by zhangke 
 AC_LIB_PREFIX
-#===================
 AC_C_BIGENDIAN
 
 # =========================

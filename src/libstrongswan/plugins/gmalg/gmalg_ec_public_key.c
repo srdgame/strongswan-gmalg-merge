@@ -126,7 +126,7 @@ METHOD(public_key_t, verify, bool,
 
 METHOD(public_key_t, encrypt, bool,
 	private_gmalg_ec_public_key_t *this, encryption_scheme_t scheme,
-	chunk_t crypto, chunk_t *plain)
+	void* params, chunk_t crypto, chunk_t *plain)
 {
 	DBG1(DBG_LIB, "EC public key encryption");
 
@@ -183,7 +183,7 @@ bool gmalg_ec_fingerprint(ECCrefPublicKey *pubkey, cred_encoding_type_t type, ch
 	hasher->destroy(hasher);
 	free(key.ptr);
 
-	lib->encoding->cache(lib->encoding, type, pubkey, *fp);
+	lib->encoding->cache(lib->encoding, type, pubkey, fp);
 	return TRUE;
 }
 

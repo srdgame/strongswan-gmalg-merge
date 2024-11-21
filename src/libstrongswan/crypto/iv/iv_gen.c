@@ -27,10 +27,6 @@ iv_gen_t* iv_gen_create_for_alg(encryption_algorithm_t alg)
 {
 	switch (alg)
 	{
-		case ENCR_SM1_ECB:
-		case ENCR_SM1_CBC:
-		case ENCR_SM4_ECB:
-		case ENCR_SM4_CBC:
 		case ENCR_DES:
 		case ENCR_3DES:
 		case ENCR_RC5:
@@ -44,6 +40,10 @@ iv_gen_t* iv_gen_create_for_alg(encryption_algorithm_t alg)
 		case ENCR_TWOFISH_CBC:
 		case ENCR_RC2_CBC:
 		case ENCR_AES_CFB:
+		case ENCR_SM1_ECB:
+		case ENCR_SM1_CBC:
+		case ENCR_SM4_ECB:
+		case ENCR_SM4_CBC:
 			return iv_gen_rand_create();
 		case ENCR_AES_CTR:
 		case ENCR_AES_CCM_ICV8:

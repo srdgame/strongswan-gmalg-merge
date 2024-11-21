@@ -221,8 +221,8 @@ static kernel_algorithm_t encryption_algs[] = {
 	{ENCR_AES_GCM_ICV16,		"rfc4106(gcm(aes))"	},
 	{ENCR_NULL_AUTH_AES_GMAC,	"rfc4543(gcm(aes))"	},
 	{ENCR_CAMELLIA_CBC,			"cbc(camellia)"		},
-	{ENCR_SM1_ECB,				"ecb(sm4)"			},
-	{ENCR_SM1_CBC,				"cbc(sm4)"			},
+	{ENCR_SM1_ECB,				"ecb(sm1)"			},
+	{ENCR_SM1_CBC,				"cbc(sm1)"			},
 	{ENCR_SM4_ECB,				"ecb(sm4)"			},
 	{ENCR_SM4_CBC,				"cbc(sm4)"			},
 /*	{ENCR_CAMELLIA_CTR,			"***"				}, */

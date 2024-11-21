@@ -21,15 +21,15 @@
 #include "public_key.h"
 #include "signature_params.h"
 
-ENUM(key_type_names, KEY_ANY, KEY_BLISS,
+ENUM(key_type_names, KEY_ANY, KEY_SM2,
 	"ANY",
 	"RSA",
 	"ECDSA",
 	"DSA",
 	"ED25519",
 	"ED448",
-	"SM2",
-	"BLISS"
+	"BLISS",
+	"SM2"
 );
 
 ENUM(signature_scheme_names, SIGN_UNKNOWN, SIGN_SM2_WITH_SM3,

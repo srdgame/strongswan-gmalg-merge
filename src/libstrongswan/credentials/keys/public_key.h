@@ -48,12 +48,10 @@ enum key_type_t {
 	KEY_ED25519 = 4,
 	/** Ed448   PureEdDSA instance as in RFC 8032 */
 	KEY_ED448   = 5,
-	/** Added by zhangke */
-	KEY_SM2   = 6,
 	/** BLISS */
-	//Modified by zhangke
-	//KEY_BLISS = 6,
-	KEY_BLISS = 7,
+	KEY_BLISS = 6,
+	/** Added by zhangke */
+	KEY_SM2   = 7,
 };
 
 /**

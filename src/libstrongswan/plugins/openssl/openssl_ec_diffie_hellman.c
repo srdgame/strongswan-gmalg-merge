@@ -279,9 +279,6 @@ int openssl_ecdh_group_to_nid(key_exchange_method_t group)
 {
 	switch (group)
 	{
-		case CURVE_SM2:
-			return NID_sm2p256v1;
-			break;
 		case ECP_192_BIT:
 			return NID_X9_62_prime192v1;
 		case ECP_224_BIT:
@@ -303,6 +300,9 @@ int openssl_ecdh_group_to_nid(key_exchange_method_t group)
 		case ECP_512_BP:
 			return NID_brainpoolP512r1;
 #endif
+		case CURVE_SM2:
+			return NID_sm2;
+			break;
 		default:
 			return 0;
 	}

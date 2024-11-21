@@ -22,14 +22,14 @@
 #include <asn1/oid.h>
 #include <credentials/keys/signature_params.h>
 
-ENUM_BEGIN(hash_algorithm_names, HASH_SHA1, HASH_IDENTITY,
+ENUM_BEGIN(hash_algorithm_names, HASH_SHA1, HASH_SM3,
 	"HASH_SHA1",
 	"HASH_SHA2_256",
 	"HASH_SHA2_384",
 	"HASH_SHA2_512",
-	"HASH_SM3",
-	"HASH_IDENTITY");
-ENUM_NEXT(hash_algorithm_names, HASH_UNKNOWN, HASH_SHA3_512, HASH_IDENTITY,
+	"HASH_IDENTITY",
+	"HASH_SM3");
+ENUM_NEXT(hash_algorithm_names, HASH_UNKNOWN, HASH_SHA3_512, HASH_SM3,
 	"HASH_UNKNOWN",
 	"HASH_MD2",
 	"HASH_MD4",
@@ -41,14 +41,14 @@ ENUM_NEXT(hash_algorithm_names, HASH_UNKNOWN, HASH_SHA3_512, HASH_IDENTITY,
 	"HASH_SHA3_512");
 ENUM_END(hash_algorithm_names, HASH_SHA3_512);
 
-ENUM_BEGIN(hash_algorithm_short_names, HASH_SHA1, HASH_IDENTITY,
+ENUM_BEGIN(hash_algorithm_short_names, HASH_SHA1, HASH_SM3,
 	"sha1",
 	"sha256",
 	"sha384",
 	"sha512",
-	"sm3",
-	"identity");
-ENUM_NEXT(hash_algorithm_short_names, HASH_UNKNOWN, HASH_SHA3_512, HASH_IDENTITY,
+	"identity",
+	"sm3");
+ENUM_NEXT(hash_algorithm_short_names, HASH_UNKNOWN, HASH_SHA3_512, HASH_SM3,
 	"unknown",
 	"md2",
 	"md4",
@@ -60,14 +60,14 @@ ENUM_NEXT(hash_algorithm_short_names, HASH_UNKNOWN, HASH_SHA3_512, HASH_IDENTITY
 	"sha3_512");
 ENUM_END(hash_algorithm_short_names, HASH_SHA3_512);
 
-ENUM_BEGIN(hash_algorithm_short_names_upper, HASH_SHA1, HASH_IDENTITY,
+ENUM_BEGIN(hash_algorithm_short_names_upper, HASH_SHA1, HASH_SM3,
 	"SHA1",
 	"SHA2_256",
 	"SHA2_384",
 	"SHA2_512",
-	"SM3",
-	"IDENTITY");
-ENUM_NEXT(hash_algorithm_short_names_upper, HASH_UNKNOWN, HASH_SHA3_512, HASH_IDENTITY,
+	"IDENTITY",
+	"SM3");
+ENUM_NEXT(hash_algorithm_short_names_upper, HASH_UNKNOWN, HASH_SHA3_512, HASH_SM3,
 	"UNKNOWN",
 	"MD2",
 	"MD4",
@@ -86,8 +86,6 @@ size_t hasher_hash_size(hash_algorithm_t alg)
 {
 	switch (alg)
 	{
-		case HASH_SM3:
-			return HASH_SIZE_SM3;
 		case HASH_SHA1:
 			return HASH_SIZE_SHA1;
 		case HASH_SHA256:
@@ -112,6 +110,8 @@ size_t hasher_hash_size(hash_algorithm_t alg)
 			return HASH_SIZE_SHA384;
 		case HASH_SHA3_512:
 			return HASH_SIZE_SHA512;
+		case HASH_SM3:
+			return HASH_SIZE_SM3;
 		case HASH_IDENTITY:
 		case HASH_UNKNOWN:
 			break;
@@ -177,8 +177,6 @@ hash_algorithm_t hasher_algorithm_from_prf(pseudo_random_function_t alg)
 {
 	switch (alg)
 	{
-		case PRF_HMAC_SM3:
-			return HASH_SM3;
 		case PRF_HMAC_MD5:
 			return HASH_MD5;
 		case PRF_HMAC_SHA1:
@@ -191,6 +189,8 @@ hash_algorithm_t hasher_algorithm_from_prf(pseudo_random_function_t alg)
 			return HASH_SHA384;
 		case PRF_HMAC_SHA2_512:
 			return HASH_SHA512;
+		case PRF_HMAC_SM3:
+			return HASH_SM3;
 		case PRF_HMAC_TIGER:
 		case PRF_AES128_XCBC:
 		case PRF_AES128_CMAC:
@@ -245,8 +245,6 @@ hash_algorithm_t hasher_algorithm_from_integrity(integrity_algorithm_t alg,
 	}
 	switch (alg)
 	{
-		case AUTH_HMAC_SM3:
-			return HASH_SM3;
 		case AUTH_HMAC_MD5_96:
 		case AUTH_HMAC_MD5_128:
 		case AUTH_KPDK_MD5:
@@ -265,6 +263,8 @@ hash_algorithm_t hasher_algorithm_from_integrity(integrity_algorithm_t alg,
 		case AUTH_HMAC_SHA2_512_256:
 		case AUTH_HMAC_SHA2_512_512:
 			return HASH_SHA512;
+		case AUTH_HMAC_SM3:
+			return HASH_SM3;
 		case AUTH_AES_CMAC_96:
 		case AUTH_AES_128_GMAC:
 		case AUTH_AES_192_GMAC:
@@ -286,8 +286,6 @@ integrity_algorithm_t hasher_algorithm_to_integrity(hash_algorithm_t alg,
 {
 	switch (alg)
 	{
-		case HASH_SM3:
-			return AUTH_HMAC_SM3;
 		case HASH_MD5:
 			switch (length)
 			{
@@ -338,6 +336,8 @@ integrity_algorithm_t hasher_algorithm_to_integrity(hash_algorithm_t alg,
 					return AUTH_HMAC_SHA2_512_512;
 			}
 			break;
+		case HASH_SM3:
+			return AUTH_HMAC_SM3;
 		case HASH_MD2:
 		case HASH_MD4:
 		case HASH_SHA224:
@@ -389,9 +389,6 @@ int hasher_algorithm_to_oid(hash_algorithm_t alg)
 
 	switch (alg)
 	{
-		case HASH_SM3:
-			oid = OID_SM3;
-			break;
 		case HASH_MD2:
 			oid = OID_MD2;
 			break;
@@ -425,6 +422,9 @@ int hasher_algorithm_to_oid(hash_algorithm_t alg)
 		case HASH_SHA3_512:
 			oid = OID_SHA3_512;
 			break;
+		case HASH_SM3:
+			oid = OID_SM3;
+			break;
 		default:
 			oid = OID_UNKNOWN;
 	}
@@ -438,14 +438,6 @@ int hasher_signature_algorithm_to_oid(hash_algorithm_t alg, key_type_t key)
 {
 	switch (key)
 	{
-		case KEY_SM2:
-			switch (alg)
-			{
-				case HASH_SM3:
-					return OID_SM2_WITH_SM3;
-				default:
-					return OID_UNKNOWN;
-			}
 		case KEY_RSA:
 			switch (alg)
 			{
@@ -519,6 +511,14 @@ int hasher_signature_algorithm_to_oid(hash_algorithm_t alg, key_type_t key)
 					return OID_BLISS_WITH_SHA3_384;
 				case HASH_SHA3_512:
 					return OID_BLISS_WITH_SHA3_512;
+				default:
+					return OID_UNKNOWN;
+			}
+		case KEY_SM2:
+			switch (alg)
+			{
+				case HASH_SM3:
+					return OID_SM2_WITH_SM3;
 				default:
 					return OID_UNKNOWN;
 			}

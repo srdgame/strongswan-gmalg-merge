@@ -32,9 +32,9 @@ struct private_gmalg_ec_diffie_hellman_t {
 	gmalg_ec_diffie_hellman_t public;
 
 	/**
-	 * Diffie Hellman group number.
+	 * Diffie Hellman group.
 	 */
-	diffie_hellman_group_t group;
+	key_exchange_method_t group;
 
 	/**
 	 * Shared secret
@@ -81,7 +81,7 @@ static bool compute_shared_key(private_gmalg_ec_diffie_hellman_t *this,
 	return ret;
 }
 
-METHOD(diffie_hellman_t, set_other_public_value, bool,
+METHOD(key_exchange_t, set_public_key, bool,
 	private_gmalg_ec_diffie_hellman_t *this, chunk_t value)
 {
 	chunk_clear(&this->shared_secret);
@@ -98,7 +98,7 @@ METHOD(diffie_hellman_t, set_other_public_value, bool,
 	return TRUE;
 }
 
-METHOD(diffie_hellman_t, get_my_public_value, bool,
+METHOD(key_exchange_t, get_public_key, bool,
 	private_gmalg_ec_diffie_hellman_t *this,chunk_t *value)
 {
 	*value  = chunk_alloc(ECCref_MAX_LEN*2);
@@ -108,7 +108,7 @@ METHOD(diffie_hellman_t, get_my_public_value, bool,
 	return TRUE;
 }
 
-METHOD(diffie_hellman_t, set_private_value, bool,
+METHOD(key_exchange_t, set_private_key, bool,
 	private_gmalg_ec_diffie_hellman_t *this, chunk_t value)
 {
 	bool ret = FALSE;
@@ -120,7 +120,7 @@ METHOD(diffie_hellman_t, set_private_value, bool,
 	return ret;
 }
 
-METHOD(diffie_hellman_t, get_shared_secret, bool,
+METHOD(key_exchange_t, get_shared_secret, bool,
 	private_gmalg_ec_diffie_hellman_t *this, chunk_t *secret)
 {
 	if (!this->computed)
@@ -131,13 +131,13 @@ METHOD(diffie_hellman_t, get_shared_secret, bool,
 	return TRUE;
 }
 
-METHOD(diffie_hellman_t, get_dh_group, diffie_hellman_group_t,
+METHOD(key_exchange_t, get_method, key_exchange_method_t,
 	private_gmalg_ec_diffie_hellman_t *this)
 {
 	return this->group;
 }
 
-METHOD(diffie_hellman_t, destroy, void,
+METHOD(key_exchange_t, destroy, void,
 	private_gmalg_ec_diffie_hellman_t *this)
 {
 	GMALG_CloseDevice(this->hDeviceHandle);
@@ -149,18 +149,18 @@ METHOD(diffie_hellman_t, destroy, void,
 /*
  * Described in header.
  */
-gmalg_ec_diffie_hellman_t *gmalg_ec_diffie_hellman_create(diffie_hellman_group_t group)
+gmalg_ec_diffie_hellman_t *gmalg_ec_diffie_hellman_create(key_exchange_method_t group)
 {
 	private_gmalg_ec_diffie_hellman_t *this;
 
 	INIT(this,
 		.public = {
-			.dh = {
+			.ke = {
 				.get_shared_secret = _get_shared_secret,
-				.set_other_public_value = _set_other_public_value,
-				.get_my_public_value = _get_my_public_value,
-				.set_private_value = _set_private_value,
-				.get_dh_group = _get_dh_group,
+				.set_public_key = _set_public_key,
+				.get_public_key = _get_public_key,
+				.set_private_key = _set_private_key,
+				.get_method = _get_method,
 				.destroy = _destroy,
 			},
 		},
