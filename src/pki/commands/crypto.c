@@ -28,7 +28,7 @@
 #define GMSDF_CRYPTER	4
 #define GMSDF_PRF	5
 #define GMSDF_SIGNER	6
-#define GMSDF_DH	7
+#define GMSDF_KE	7
 #define GMSDF_SM2	8
 
 void print_hex(unsigned char *name, unsigned char *c, int n)
@@ -254,45 +254,45 @@ int gmsdf_signer_test(chunk_t data)
 	return ret;
 }
 
-int gmsdf_dh_test(chunk_t data)
+int gmsdf_ke_test(chunk_t data)
 {
 	int ret = 0;
-	diffie_hellman_t *dh_i, *dh_r;
-	diffie_hellman_group_t group = CURVE_SM2;
+	key_exchange_t *ke_i, *ke_r;
+	key_exchange_method_t group = CURVE_SM2;
 
 	chunk_t pub_i = chunk_empty;
 	chunk_t pub_r = chunk_empty;
 	chunk_t rsecret_i = chunk_empty;
 	chunk_t rsecret_r = chunk_empty;
 
-	dh_i = lib->crypto->create_dh(lib->crypto, group);
-	if(!dh_i)
+	ke_i = lib->crypto->create_ke(lib->crypto, group);
+	if(!ke_i)
 	{
-		fprintf(stderr, " create dh 1 err \n");
+		fprintf(stderr, " create ke 1 err \n");
 		ret = FALSE;
 	}
 
-	dh_r = lib->crypto->create_dh(lib->crypto, group);
-	if(!dh_r)
+	ke_r = lib->crypto->create_ke(lib->crypto, group);
+	if(!ke_r)
 	{
-		fprintf(stderr, " create dh 2 err \n");
+		fprintf(stderr, " create ke 2 err \n");
 		ret = FALSE;
 	}
 
-	ret = dh_i->get_my_public_value(dh_i, &pub_i);
-	ret = dh_r->get_my_public_value(dh_r, &pub_r);
+	ret = ke_i->get_public_key(ke_i, &pub_i);
+	ret = ke_r->get_public_key(ke_r, &pub_r);
 
-	ret = dh_i->set_other_public_value(dh_i, pub_r);
-	ret = dh_r->set_other_public_value(dh_r, pub_i);
+	ret = ke_i->set_public_key(ke_i, pub_r);
+	ret = ke_r->set_public_key(ke_r, pub_i);
 
-	ret = dh_i->get_shared_secret(dh_i, &rsecret_i);
-	ret = dh_r->get_shared_secret(dh_r, &rsecret_r);
+	ret = ke_i->get_shared_secret(ke_i, &rsecret_i);
+	ret = ke_r->get_shared_secret(ke_r, &rsecret_r);
 
 	print_hex("out data 1", rsecret_i.ptr, rsecret_i.len);
 	print_hex("out data 2", rsecret_r.ptr, rsecret_r.len);
 
-	dh_i->destroy(dh_i);
-	dh_r->destroy(dh_r);
+	ke_i->destroy(ke_i);
+	ke_r->destroy(ke_r);
 	chunk_free(&rsecret_i);
 	chunk_free(&rsecret_r);
 	chunk_free(&pub_i);
@@ -398,9 +398,9 @@ static int crypto()
 				{
 					type = GMSDF_SIGNER;
 				}
-				else if (streq(arg, "dh"))
+				else if (streq(arg, "ke"))
 				{
-					type = GMSDF_DH;
+					type = GMSDF_KE;
 				}
 				else if (streq(arg, "rng"))
 				{
@@ -450,8 +450,8 @@ static int crypto()
 		case GMSDF_SIGNER:
 			ret = gmsdf_signer_test(chunk);
 			break;
-		case GMSDF_DH:
-			ret = gmsdf_dh_test(chunk);
+		case GMSDF_KE:
+			ret = gmsdf_ke_test(chunk);
 			break;
 		case GMSDF_RNG:
 			ret = gmsdf_rng_test(chunk);
@@ -475,7 +475,7 @@ static void __attribute__ ((constructor))reg()
 			{ crypto, 'm', "crypto",
 			"crypto gm interface test",
 			{"[--in file] "
-			"[--type hash|crypter|prf|signer|dh|rng|sm2]"},
+			"[--type hash|crypter|prf|signer|ke|rng|sm2]"},
 			{
 			{"help",	'h', 0, "show usage information"},
 			{"in",		'i', 1, "input file, default: stdin"},
