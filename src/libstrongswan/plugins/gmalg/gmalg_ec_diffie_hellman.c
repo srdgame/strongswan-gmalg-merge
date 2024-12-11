@@ -175,10 +175,6 @@ gmalg_ec_diffie_hellman_t *gmalg_ec_diffie_hellman_create(key_exchange_method_t 
 	}
 
 	GMALG_OpenDevice(&this->hDeviceHandle);
-	ECCrefPublicKey pubKey[1];
-	ECCrefPrivateKey priKey[1];
-	ECCrefPublicKey otherPubKey[1];
-
 	GMALG_GenerateKeyPair_ECC(this->hDeviceHandle, this->pubKey, this->priKey);
 
 	return &this->public;

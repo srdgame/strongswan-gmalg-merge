@@ -64,7 +64,6 @@ int GMALG_GenerateRandom(
 	unsigned int uiLength,
 	unsigned char *pucRandom)
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	int rc = 0;
 
 	rc = vli_get_random(pucRandom, uiLength);
@@ -107,7 +106,6 @@ int GMALG_GenerateKeyPair_ECC(
 	ECCrefPublicKey *pucPublicKey,
 	ECCrefPrivateKey *pucPrivateKey)
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	u8 priKey[ECC_NUMWORD];
 	ecc_point pubKey[1];
 	int rc = 0;
@@ -132,7 +130,6 @@ int GMALG_ExternalSign_ECC(
 	ECCSignature *pucSignature)
 
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	int rc = 0;
 
 	rc = sm2_sign(pucSignature->r, pucSignature->s, pucPrivateKey->K, pucData);
@@ -148,7 +145,6 @@ int GMALG_ExternalVerify_ECC(
 	ECCSignature *pucSignature)
 
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	int rc = 0;
 
 	rc = sm2_verify(D2I_PUB(pucPublicKey), pucDataInput, pucSignature->r, pucSignature->s);
@@ -341,7 +337,6 @@ int GMALG_GenerateAgreementDataWithECC (
 	void **phAgreementHandle)
 
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	agreement *agree = (agreement *)malloc(sizeof(agreement));
 	int rc = 0;
 
@@ -372,7 +367,6 @@ int GMALG_GenerateKeyWithECC (
 	void *phKey)
 
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	agreement *agree = (agreement *)hAgreementHandle;
 	ecc_point tempPubKey[1];
 	u8 ZB[ECC_NUMWORD];
@@ -405,7 +399,6 @@ int GMALG_GenerateAgreementDataAndKeyWithECC(
 	ECCrefPublicKey *pucResponseTmpPublicKey,
 	void *phKey)
 {
-	gmalg_ctx *ctx = (gmalg_ctx *)hDeviceHandle;
 	u8 tempPriKey[ECC_NUMWORD];
 	ecc_point tempPubKey[1];
 	u8 ZA[ECC_NUMWORD];

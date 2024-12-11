@@ -150,7 +150,6 @@ bool gmalg_ec_fingerprint(ECCrefPublicKey *pubkey, cred_encoding_type_t type, ch
 {
 	hasher_t *hasher;
 	chunk_t key;
-	u_char *p;
 
 	if (lib->encoding->get_cache(lib->encoding, type, pubkey, fp))
 	{

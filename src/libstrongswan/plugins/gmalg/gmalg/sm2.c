@@ -168,7 +168,6 @@ int ecc_valid_public_key(ecc_point *publicKey)
 
 int sm2_make_prikey(u8 *prikey)
 {
-	ecc_point pub[1];
 	u8 pri[ECC_NUMWORD];
 	int i = 10;
 
@@ -308,7 +307,7 @@ int sm2_verify(ecc_point *pubkey, u8 *hash, u8 *r, u8 *s)
 	}
 
 	vli_mod_add(t, r, s, ecc_curve.n); // r + s
-	if (t == 0)
+	if (*t == 0)
 		return -1;
 
 	ecc_point_mult2(&result, &ecc_curve.g, pub, s, t);
@@ -481,6 +480,8 @@ int sm2_shared_point(u8* selfPriKey,  u8* selfTempPriKey, ecc_point* selfTempPub
 
 	ecc_bytes2native(key->x, U->x);
 	ecc_bytes2native(key->y, U->y);
+
+	return 0;
 }
 
 int sm2_shared_key(ecc_point *point, u8 *ZA, u8 *ZB, u32 keyLen, u8 *key)
@@ -491,6 +492,8 @@ int sm2_shared_key(ecc_point *point, u8 *ZA, u8 *ZB, u32 keyLen, u8 *key)
 	memcpy(Z + ECC_NUMWORD*2, ZA, ECC_NUMWORD);
 	memcpy(Z + ECC_NUMWORD*3, ZB, ECC_NUMWORD);
 	sm3_kdf(Z, ECC_NUMWORD*4, key, keyLen);
+
+	return 0;
 }
 
 /****hash = Hash(Ux||ZA||ZB||x1||y1||x2||y2)****/
@@ -532,9 +535,8 @@ int ECC_KeyEx_Init_I(u8 *pri, ecc_point *pub)
 
 int ECC_KeyEx_Re_I(u8 *rb, u8 *dB, ecc_point *RA, ecc_point *PA, u8* ZA, u8 *ZB, u8 *K, u32 klen, ecc_point *RB, ecc_point *V, u8* SB)
 {
-	sm3_ctx md[1];
 	u8 Z[ECC_NUMWORD*2 + ECC_NUMBITS/4]={0};
-	u8 hash[ECC_NUMWORD],S1[ECC_NUMWORD];
+	u8 hash[ECC_NUMWORD];
 	u8 temp=0x02;
 
 	//--------B2: RB=[rb]G=(x2,y2)--------
@@ -557,7 +559,6 @@ int ECC_KeyEx_Re_I(u8 *rb, u8 *dB, ecc_point *RA, ecc_point *PA, u8* ZA, u8 *ZB,
 int ECC_KeyEx_Init_II(u8* ra, u8* dA, ecc_point* RA, ecc_point* RB, ecc_point* PB, u8
 		ZA[],u8 ZB[],u8 SB[],u8 K[], u32 klen,u8 SA[])
 {
-	sm3_ctx md[1];
 	u8 Z[ECC_NUMWORD*2 + ECC_NUMWORD*2]={0};
 	u8 hash[ECC_NUMWORD],S1[ECC_NUMWORD];
 	u8 temp[2]={0x02,0x03};
@@ -588,7 +589,6 @@ int ECC_KeyEx_Re_II(ecc_point *V, ecc_point *RA, ecc_point *RB, u8 ZA[], u8 ZB[]
 	u8 hash[ECC_NUMWORD];
 	u8 S2[ECC_NUMWORD];
 	u8 temp=0x03;
-	sm3_ctx md[1];
 
 	/*S2 = Hash(0x03||Vy||Hash(Vx||ZA||ZB||x1||y1||x2||y2))*/
 	ECC_Key_ex_hash1(V->x,  RA, RB, ZA, ZB, hash);
